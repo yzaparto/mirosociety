@@ -19,6 +19,7 @@ from app.services.tension import TensionEngine
 from app.services.resolver import ActionResolver
 from app.services.narrator import Narrator
 from app.services.engine import SimulationEngine
+from app.services.research import ResearchService
 from app.api.simulate import router as simulate_router
 from app.api.agents import router as agents_router
 from app.api.gallery import router as gallery_router
@@ -45,7 +46,12 @@ async def lifespan(app: FastAPI):
     tension = TensionEngine(llm)
     resolver = ActionResolver()
     narrator = Narrator(llm)
-    engine = SimulationEngine(llm, store, tension, resolver, narrator)
+    research = ResearchService(
+        llm,
+        enabled=settings.search_enabled,
+        max_per_round=settings.max_searches_per_round,
+    )
+    engine = SimulationEngine(llm, store, tension, resolver, narrator, research=research)
 
     app.state.store = store
     app.state.llm = llm

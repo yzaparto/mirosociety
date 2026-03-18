@@ -282,6 +282,10 @@
             {{ published ? 'Published' : 'Publish to Gallery' }}
           </button>
           <button @click="copyMarkdown" class="btn-secondary">{{ copiedMd ? 'Copied!' : 'Copy as Markdown' }}</button>
+          <button @click="downloadPdf" class="btn-secondary inline-flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            Download PDF
+          </button>
         </div>
       </div>
     </div>
@@ -349,8 +353,10 @@ const displayMetrics = computed(() => {
 })
 
 function funnelWidth(funnel, key) {
+  const val = funnel[key] || 0
+  if (val === 0) return 0
   const max = funnel.aware || 1
-  return Math.max(2, (funnel[key] / max) * 100)
+  return Math.max(2, (val / max) * 100)
 }
 
 async function loadReport() {
@@ -372,6 +378,30 @@ function copyLink() {
   navigator.clipboard.writeText(window.location.href)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
+}
+
+function downloadPdf() {
+  const title = brief.value?.headline || meta.value?.world_name || 'Simulation Report'
+  const style = document.createElement('style')
+  style.textContent = `
+    @media print {
+      body * { visibility: hidden; }
+      .max-w-4xl, .max-w-4xl * { visibility: visible; }
+      .max-w-4xl { position: absolute; left: 0; top: 0; width: 100%; max-width: 100%; padding: 20px; }
+      .btn-secondary, .btn-secondary *, nav, nav * { display: none !important; }
+      @page { margin: 1cm; size: A4; }
+      .bg-slate-950 { background: white !important; color: black !important; }
+      .text-slate-200, .text-slate-300, .text-slate-400 { color: #333 !important; }
+      .text-slate-500, .text-slate-600 { color: #666 !important; }
+      .border-slate-800\\/40 { border-color: #ddd !important; }
+      .bg-slate-900\\/60 { background: #f5f5f5 !important; }
+    }
+  `
+  document.head.appendChild(style)
+  document.title = title
+  window.print()
+  document.head.removeChild(style)
+  document.title = 'MiroSociety'
 }
 
 function copyMarkdown() {

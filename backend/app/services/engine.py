@@ -13,6 +13,7 @@ from app.services.llm import LLMClient, parse_json
 from app.services.tension import TensionEngine
 from app.services.resolver import ActionResolver
 from app.services.narrator import Narrator
+from app.services.research import ResearchService
 from app.constants import TIMES_OF_DAY
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,10 @@ Action args by type:
 - PURCHASE: {{"product": "what you buy", "amount": N}}
 - ABANDON: {{"product": "what you stop using", "reason": "why you leave"}}
 - COMPARE: {{"product_a": "first product", "product_b": "second product", "verdict": "your comparison"}}
+- RESEARCH: {{"query": "what to search the internet for", "reason": "why you need this info"}}
+  (Use when you need REAL facts — prices, reviews, competitor info, news — to make a better decision. You'll get actual search results next round.)
+- INVESTIGATE: {{"target_id": agent_id, "question": "what you want to ask them"}}
+  (Use when you want to deliberately seek out a specific person and ask them something directly. They will answer honestly or not, depending on who they are.)
 - DO_NOTHING: {{}}
 
 Return ONLY valid JSON."""
@@ -94,7 +99,9 @@ BEHAVIOR_RULES_SOCIAL = """IMPORTANT RULES FOR YOUR BEHAVIOR:
 - If everyone around you agrees, be suspicious — introduce nuance or a counterpoint.
 - Conversation is how societies function. Debate, argue, persuade, gossip, confide. SPEAK_PUBLIC and SPEAK_PRIVATE are your primary tools — use them most of the time.
 - Only escalate to FORM_GROUP, PROPOSE_RULE, or PROTEST when conversation has clearly failed or a specific situation demands organized action. Do NOT form a group unless you have a concrete, specific reason that existing groups don't cover.
-- React to EVENTS when they happen — they change your situation."""
+- React to EVENTS when they happen — they change your situation.
+- Before forming strong opinions, consider whether you actually KNOW the facts or are just assuming. If you're uncertain, RESEARCH to find real information or INVESTIGATE someone who might know.
+- If someone makes a claim you doubt, you can INVESTIGATE them directly or RESEARCH the claim."""
 
 BEHAVIOR_RULES_MARKET = """IMPORTANT RULES FOR YOUR BEHAVIOR:
 - You are a CONSUMER, not a debater. Your actions should reflect real consumer behavior.
@@ -113,6 +120,8 @@ BEHAVIOR_RULES_MARKET = """IMPORTANT RULES FOR YOUR BEHAVIOR:
   * High price_sensitivity → you COMPARE prices, consider ABANDON if value drops
   * High social_proof → you follow what others are doing (if they PURCHASE, you consider it; if they ABANDON, you waver)
   * High novelty_seeking → you're excited by change, early to PURCHASE new things
+- Before forming strong opinions, consider whether you actually KNOW the facts or are just assuming. If you're uncertain, RESEARCH to find real information or INVESTIGATE someone who might know.
+- If someone makes a claim you doubt, you can INVESTIGATE them directly or RESEARCH the claim.
 {repetition_warning}"""
 
 REACTIVE_PROMPT_SOCIAL = """You are {name}, a {role} in {world_name}.
@@ -170,6 +179,30 @@ Reply with ONLY the letter and your response (1-2 sentences max).
 Examples: "a I already cancelled my order — this new logo looks like a toy brand." or "b Honestly? I'm looking at Rivian now." or "c" """
 
 
+INVESTIGATE_PROMPT = """You are {target_name}, a {target_age}-year-old {target_role} in {world_name}.
+Your mood: {mood}.
+Personality: honesty={honesty:.1f}, confrontational={confrontational:.1f}, empathy={empathy:.1f}, conformity={conformity:.1f}
+{market_traits}
+
+Your current beliefs:
+{beliefs}
+
+Your recent experience:
+{recent_memory}
+
+{agent_name} approaches you and asks: "{question}"
+
+Your relationship with {agent_name}: {relationship}
+
+Answer IN CHARACTER. Based on your personality:
+- If honesty is high, answer truthfully even if it's uncomfortable
+- If honesty is low, you may deflect, lie, or give a partial answer
+- If confrontational is high, you may push back on the question itself
+- If empathy is high, consider how your answer affects {agent_name}
+
+Reply with 1-2 sentences. Just your spoken answer, nothing else."""
+
+
 class SimulationEngine:
     def __init__(
         self,
@@ -178,12 +211,14 @@ class SimulationEngine:
         tension: TensionEngine,
         resolver: ActionResolver,
         narrator: Narrator,
+        research: ResearchService | None = None,
     ):
         self.llm = llm
         self.store = store
         self.tension = tension
         self.resolver = resolver
         self.narrator = narrator
+        self.research = research
         self._running: dict[str, bool] = {}
         self._paused: dict[str, asyncio.Event] = {}
         self._speed: dict[str, SpeedMode] = {}
@@ -250,6 +285,11 @@ class SimulationEngine:
                     decisions, world_state, agents, round_num
                 )
 
+                if self.research:
+                    resolved_entries = await self._fulfill_research(
+                        resolved_entries, agents, world_state
+                    )
+
                 speech_actions = [
                     e for e in resolved_entries
                     if e.action_type in (ActionType.SPEAK_PUBLIC, ActionType.SPEAK_PRIVATE) and e.speech
@@ -304,6 +344,18 @@ class SimulationEngine:
                                 part += f': recommended {e.action_args.get("product", "the product")}'
                             elif e.action_type == ActionType.COMPARE:
                                 part += f': compared {e.action_args.get("product_a", "")} vs {e.action_args.get("product_b", "")}'
+                            elif e.action_type == ActionType.RESEARCH:
+                                findings = e.action_args.get("findings", "")
+                                part += f': searched \'{e.action_args.get("query", "")}\''
+                                if findings:
+                                    part += f' — {findings[:120]}'
+                            elif e.action_type == ActionType.INVESTIGATE:
+                                response = e.action_args.get("response", "")
+                                target_names = [a.name for a in agents if a.id in e.targets]
+                                target_name = target_names[0] if target_names else "someone"
+                                part += f': asked {target_name} \'{e.action_args.get("question", "")[:50]}\''
+                                if response:
+                                    part += f' — they said: \'{response[:80]}\''
                             if e.targets:
                                 target_names = [a.name for a in agents if a.id in e.targets]
                                 if target_names:
@@ -330,6 +382,12 @@ class SimulationEngine:
                                         heard.append(f"{e.agent_name} SWITCHED to a competitor")
                                     else:
                                         heard.append(f"{e.agent_name} did {e.action_type.value}")
+                                elif e.action_type == ActionType.RESEARCH:
+                                    heard.append(f"{e.agent_name} was looking something up online: '{e.action_args.get('query', '')[:50]}'")
+                                elif e.action_type == ActionType.INVESTIGATE:
+                                    target_names = [a.name for a in agents if a.id in e.targets]
+                                    target_name = target_names[0] if target_names else "someone"
+                                    heard.append(f"{e.agent_name} went to question {target_name} directly")
                                 elif e.speech:
                                     heard.append(f'{e.agent_name} said: "{e.speech[:120]}"')
                                 elif e.action_type in (ActionType.PROTEST, ActionType.DEFECT, ActionType.FORM_GROUP, ActionType.ABANDON, ActionType.PURCHASE):
@@ -628,9 +686,11 @@ class SimulationEngine:
             social_actions = {
                 ActionType.SPEAK_PUBLIC, ActionType.SPEAK_PRIVATE,
                 ActionType.TRADE, ActionType.FORM_GROUP, ActionType.PROTEST,
-                ActionType.RECOMMEND,
+                ActionType.RECOMMEND, ActionType.INVESTIGATE,
             }
             available = [a for a in available if a not in social_actions]
+        if not self.research or not self.research.enabled:
+            available = [a for a in available if a != ActionType.RESEARCH]
 
         actions_text = "\n".join(f"- {a.value}" for a in available)
 
@@ -805,6 +865,153 @@ class SimulationEngine:
 
         return reactions
 
+    async def _fulfill_research(
+        self,
+        entries: list[ActionEntry],
+        agents: list[AgentPersona],
+        world_state: WorldState,
+    ) -> list[ActionEntry]:
+        agent_map = {a.id: a for a in agents}
+
+        research_entries = [e for e in entries if e.action_type == ActionType.RESEARCH]
+        investigate_entries = [e for e in entries if e.action_type == ActionType.INVESTIGATE]
+
+        max_searches = self.research.max_per_round if self.research else 5
+        capped_research = research_entries[:max_searches]
+        overflow_research = research_entries[max_searches:]
+
+        for entry in overflow_research:
+            agent = agent_map.get(entry.agent_id)
+            if agent:
+                query = entry.action_args.get("query", "something")
+                agent.working_memory.append(
+                    f"Day {world_state.day}: Wanted to research '{query[:40]}' but didn't get to it."
+                )
+                if len(agent.working_memory) > 9:
+                    agent.working_memory = agent.working_memory[-9:]
+
+        search_tasks = []
+        search_entries = []
+        for entry in capped_research:
+            agent = agent_map.get(entry.agent_id)
+            if agent:
+                query = entry.action_args.get("query", "")
+                reason = entry.action_args.get("reason", "")
+                search_tasks.append(
+                    self.research.search_and_summarize(query, reason, agent, world_state)
+                )
+                search_entries.append(entry)
+
+        if search_tasks:
+            search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+            for entry, result in zip(search_entries, search_results):
+                agent = agent_map.get(entry.agent_id)
+                if not agent:
+                    continue
+                if isinstance(result, str) and result:
+                    entry.action_args["findings"] = result
+                    agent.working_memory.append(
+                        f"Day {world_state.day}: Researched '{entry.action_args.get('query', '')}' — {result[:150]}"
+                    )
+                else:
+                    agent.working_memory.append(
+                        f"Day {world_state.day}: Tried to research but couldn't find useful information."
+                    )
+                if len(agent.working_memory) > 9:
+                    agent.working_memory = agent.working_memory[-9:]
+
+        investigate_tasks = []
+        investigate_pairs = []
+        for entry in investigate_entries:
+            agent = agent_map.get(entry.agent_id)
+            target_id = entry.targets[0] if entry.targets else None
+            target = agent_map.get(target_id) if target_id else None
+            if agent and target:
+                question = entry.action_args.get("question", "")
+                investigate_tasks.append(
+                    self._run_investigation(agent, target, question, world_state)
+                )
+                investigate_pairs.append((entry, agent, target))
+
+        if investigate_tasks:
+            investigate_results = await asyncio.gather(*investigate_tasks, return_exceptions=True)
+            for (entry, agent, target), result in zip(investigate_pairs, investigate_results):
+                question = entry.action_args.get("question", "")
+                if isinstance(result, str) and result:
+                    entry.action_args["response"] = result
+                    agent.working_memory.append(
+                        f"Day {world_state.day}: Asked {target.name} '{question[:60]}' — they said: '{result[:100]}'"
+                    )
+                    target.working_memory.append(
+                        f"Day {world_state.day}: {agent.name} asked me '{question[:60]}' — I told them: '{result[:80]}'"
+                    )
+                else:
+                    agent.working_memory.append(
+                        f"Day {world_state.day}: Tried to talk to {target.name} but couldn't get a clear answer."
+                    )
+                for a in (agent, target):
+                    if len(a.working_memory) > 9:
+                        a.working_memory = a.working_memory[-9:]
+
+        return entries
+
+    async def _run_investigation(
+        self,
+        agent: AgentPersona,
+        target: AgentPersona,
+        question: str,
+        world_state: WorldState,
+    ) -> str:
+        p = target.personality
+        market_traits = ""
+        has_market_traits = (
+            p.brand_loyalty != 0.5 or p.price_sensitivity != 0.5
+            or p.social_proof != 0.5 or p.novelty_seeking != 0.5
+        )
+        if has_market_traits:
+            market_traits = (
+                f"Consumer traits: brand_loyalty={p.brand_loyalty:.1f}, "
+                f"price_sensitivity={p.price_sensitivity:.1f}, "
+                f"social_proof={p.social_proof:.1f}, "
+                f"novelty_seeking={p.novelty_seeking:.1f}"
+            )
+
+        beliefs = "\n".join(f"- {b}" for b in target.beliefs[:5]) or "Still forming opinions."
+        recent_memory = "\n".join(target.working_memory[-3:]) or "Just arrived."
+
+        rel_key = str(agent.id)
+        relationship = target.relationships.get(rel_key, "No prior relationship.")
+
+        system = INVESTIGATE_PROMPT.format(
+            target_name=target.name,
+            target_age=target.age,
+            target_role=target.role,
+            world_name=world_state.blueprint.name,
+            mood=target.emotional_state,
+            honesty=p.honesty,
+            confrontational=p.confrontational,
+            empathy=p.empathy,
+            conformity=p.conformity,
+            market_traits=market_traits,
+            beliefs=beliefs,
+            recent_memory=recent_memory,
+            agent_name=agent.name,
+            question=question,
+            relationship=relationship,
+        )
+
+        try:
+            response = await self.llm.generate(
+                system=system,
+                user=question,
+                json_mode=False,
+                max_tokens=150,
+            )
+            return response.strip()
+        except Exception as e:
+            logger.warning("Investigation failed (%s -> %s): %s", agent.name, target.name, e)
+            return ""
+
     async def _reflective_memory_pass(
         self, simulation_id: str, agents: list[AgentPersona], world_state: WorldState
     ):
@@ -845,6 +1052,7 @@ class SimulationEngine:
             ActionType.PROTEST, ActionType.DEFECT, ActionType.PROPOSE_RULE,
             ActionType.FORM_GROUP, ActionType.VOTE, ActionType.BUILD,
             ActionType.PURCHASE, ActionType.ABANDON, ActionType.RECOMMEND,
+            ActionType.RESEARCH, ActionType.INVESTIGATE,
         }
         return sum(1 for a in actions if a.action_type in significant_types)
 

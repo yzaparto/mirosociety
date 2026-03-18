@@ -22,4 +22,6 @@ async def get_gallery_item(sim_id: str, request: Request):
         return cached["report"]
     narrator = request.app.state.narrator
     report = await narrator.generate_report(sim_id, store)
+    if "error" not in report:
+        await store.save_report(sim_id, report)
     return report

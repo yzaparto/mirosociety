@@ -24,19 +24,37 @@
       <div v-if="phase === 'complete'" class="text-[11px] text-slate-500 bg-slate-800/40 px-2 py-0.5 rounded">Complete</div>
       <div class="flex-1"></div>
       <button @click="showShortcuts = true" class="text-slate-600 hover:text-slate-400 text-xs transition-colors" title="Keyboard shortcuts">?</button>
+      <a
+        href="https://github.com/yzaparto/mirosociety"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="flex items-center gap-1.5 text-slate-500 hover:text-white transition-colors"
+        title="Star on GitHub"
+      >
+        <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <span class="text-[11px]">Star</span>
+      </a>
     </div>
 
     <!-- Top bar - Row 2: Controls -->
-    <div v-if="phase === 'running' || phase === 'complete'" class="h-10 border-b border-slate-800/40 flex items-center px-4 gap-2 shrink-0 bg-slate-900/20">
-      <!-- View toggle -->
-      <div class="flex bg-slate-800/40 rounded-lg p-0.5">
+    <div v-if="phase === 'running' || phase === 'complete'" class="h-10 border-b border-slate-800/40 flex items-center justify-center px-4 gap-2 shrink-0 bg-slate-900/20">
+      <!-- View toggle with sliding indicator -->
+      <div class="view-toggle relative flex bg-slate-800/50 rounded-lg p-0.5 border border-slate-700/40">
+        <div class="view-toggle-indicator absolute top-0.5 bottom-0.5 rounded-md bg-emerald-600 shadow-sm shadow-emerald-900/40 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+          :style="{ left: viewMode === 'map' ? '2px' : '50%', width: 'calc(50% - 2px)' }"></div>
         <button @click="viewMode = 'map'"
-          :class="['text-[11px] px-3 py-1 rounded-md transition-colors font-medium', viewMode === 'map' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300']">
-          Map
+          :class="['relative z-10 flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-md transition-colors duration-200 font-medium', viewMode === 'map' ? 'text-white' : 'text-slate-400 hover:text-slate-200']">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2a10 10 0 100 20 10 10 0 000-20z" opacity="0.3"/><path d="M19.07 4.93l-3.54 3.54M4.93 19.07l3.54-3.54M19.07 19.07l-3.54-3.54M4.93 4.93l3.54 3.54"/></svg>
+          <span>Map</span>
+          <span v-if="viewMode !== 'map'" class="text-[10px] text-slate-500 hidden sm:inline">Network</span>
         </button>
         <button @click="viewMode = 'feed'"
-          :class="['text-[11px] px-3 py-1 rounded-md transition-colors font-medium', viewMode === 'feed' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300']">
-          Feed
+          :class="['relative z-10 flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-md transition-colors duration-200 font-medium', viewMode === 'feed' ? 'text-white' : 'text-slate-400 hover:text-slate-200']">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span>Feed</span>
+          <span v-if="viewMode !== 'feed'" class="text-[10px] text-slate-500 hidden sm:inline">Events</span>
         </button>
       </div>
 
@@ -46,7 +64,7 @@
         <!-- Speed controls -->
         <div class="flex gap-0.5 bg-slate-800/40 rounded-lg p-0.5">
           <button v-for="s in speeds" :key="s.id" @click="doSetSpeed(s.id)"
-            :class="['text-[11px] px-2.5 py-1 rounded-md transition-colors font-medium', speed === s.id ? s.active : 'text-slate-500 hover:text-slate-300']"
+            :class="['text-[11px] px-2.5 py-1 rounded-md transition-all duration-200 font-medium', speed === s.id ? s.active : 'text-slate-500 hover:text-slate-300']"
             :title="s.title">
             {{ s.label }}
           </button>
@@ -276,7 +294,7 @@
         <!-- CENTER: Event feed -->
         <div class="flex-1 flex flex-col overflow-hidden">
           <div class="flex-1 overflow-y-auto" ref="feedRef" @scroll="onFeedScroll">
-            <div class="max-w-2xl mx-auto px-4 py-3">
+            <div class="max-w-4xl mx-auto px-6 py-4">
               <!-- Empty state -->
               <div v-if="!rawEvents.length" class="flex flex-col items-center justify-center py-20 text-slate-600">
                 <div class="w-8 h-8 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
@@ -284,15 +302,15 @@
               </div>
 
               <template v-for="(group, gi) in groupedEvents" :key="gi">
-                <div class="sticky top-0 z-10 py-1.5">
-                  <div class="text-[10px] text-slate-500 font-medium uppercase tracking-wider bg-slate-950 py-1 px-2 rounded inline-block">
+                <div class="sticky top-0 z-10 py-2">
+                  <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-950/90 backdrop-blur-sm py-1.5 px-3 rounded-md inline-block">
                     Day {{ group.day }} · {{ group.tod }}
                   </div>
                 </div>
-                <div class="mb-4 space-y-0.5">
+                <div class="mb-5 space-y-0.5">
                   <div v-for="(evt, ei) in group.events" :key="ei"
                     :class="[
-                      'py-2 px-3 rounded-md text-[13px] leading-relaxed transition-colors',
+                      'py-2.5 px-4 rounded-md text-sm leading-relaxed transition-colors',
                       evt.highlight ? 'bg-amber-950/10 border-l-2 border-amber-600/40' : 'border-l-2 border-transparent hover:bg-slate-900/40'
                     ]">
                     <span v-html="evt.html"></span>
@@ -573,8 +591,8 @@ function initGraph() {
 
   simulation = d3.forceSimulation(nodes)
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('charge', d3.forceManyBody().strength(-200))
-    .force('collide', d3.forceCollide().radius(35))
+    .force('charge', d3.forceManyBody().strength(-280))
+    .force('collide', d3.forceCollide().radius(45))
     .force('x', d3.forceX(width / 2).strength(0.05))
     .force('y', d3.forceY(height / 2).strength(0.05))
     .on('tick', onSimTick)
@@ -613,16 +631,16 @@ function renderNodes() {
     .on('mouseenter', (event, d) => { hoveredAgentId.value = d.id })
     .on('mouseleave', () => { hoveredAgentId.value = null })
 
-  nodeG.append('circle').attr('class', 'select-ring').attr('r', 22).attr('fill', 'none').attr('stroke', 'transparent').attr('stroke-width', 2.5)
-  nodeG.append('circle').attr('class', 'node-circle').attr('r', 18)
+  nodeG.append('circle').attr('class', 'select-ring').attr('r', 28).attr('fill', 'none').attr('stroke', 'transparent').attr('stroke-width', 2.5)
+  nodeG.append('circle').attr('class', 'node-circle').attr('r', 22)
     .attr('fill', d => moodNodeFill(d.emotional_state))
     .attr('stroke', d => moodNodeStroke(d.emotional_state))
-    .attr('stroke-width', 2).attr('opacity', 0.9)
+    .attr('stroke-width', 2.5).attr('opacity', 0.9)
   nodeG.append('text').attr('class', 'node-initial').attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
-    .attr('fill', '#fff').attr('font-size', '11px').attr('font-weight', '700').attr('pointer-events', 'none')
+    .attr('fill', '#fff').attr('font-size', '13px').attr('font-weight', '700').attr('pointer-events', 'none')
     .text(d => d.name.charAt(0))
-  nodeG.append('text').attr('class', 'node-label').attr('text-anchor', 'middle').attr('y', 28)
-    .attr('fill', '#94a3b8').attr('font-size', '9px').attr('font-weight', '500').attr('pointer-events', 'none')
+  nodeG.append('text').attr('class', 'node-label').attr('text-anchor', 'middle').attr('y', 34)
+    .attr('fill', '#94a3b8').attr('font-size', '10px').attr('font-weight', '500').attr('pointer-events', 'none')
     .text(d => d.name.split(' ')[0])
 }
 
@@ -675,7 +693,7 @@ function renderEdges() {
   const paths = linkGroup.selectAll('path.interaction-edge').data(graphEdges.value, d => d.id)
   paths.exit().remove()
   paths.enter().append('path').attr('class', 'interaction-edge')
-    .attr('fill', 'none').attr('stroke', d => d.color).attr('stroke-width', 1.8)
+    .attr('fill', 'none').attr('stroke', d => d.color).attr('stroke-width', 2.2)
     .attr('stroke-opacity', 0.5).attr('stroke-linecap', 'round').attr('d', d => computeEdgePath(d))
     .attr('stroke-dasharray', function() { return this.getTotalLength() })
     .attr('stroke-dashoffset', function() { return this.getTotalLength() })
@@ -1135,5 +1153,11 @@ onUnmounted(() => {
 }
 .speech-bubble-anim {
   animation: speech-pop 5s ease-out forwards;
+}
+.view-toggle {
+  isolation: isolate;
+}
+.view-toggle-indicator {
+  pointer-events: none;
 }
 </style>

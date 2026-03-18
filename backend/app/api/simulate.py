@@ -293,8 +293,17 @@ async def compare(sim_id: str, fork_id: str, request: Request):
     source_agents = await store.get_all_agents(sim_id)
     fork_agents = await store.get_all_agents(fork_id)
 
-    source_report = await narrator.generate_report(sim_id, store)
-    fork_report = await narrator.generate_report(fork_id, store)
+    async def _get_or_generate_report(sid):
+        cached = await store.get_report(sid)
+        if cached and cached.get("status") == "ready":
+            return cached["report"]
+        rpt = await narrator.generate_report(sid, store)
+        if "error" not in rpt:
+            await store.save_report(sid, rpt)
+        return rpt
+
+    source_report = await _get_or_generate_report(sim_id)
+    fork_report = await _get_or_generate_report(fork_id)
 
     return {
         "source": {

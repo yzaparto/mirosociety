@@ -20,6 +20,8 @@ class ActionType(str, Enum):
     PURCHASE = "PURCHASE"
     ABANDON = "ABANDON"
     COMPARE = "COMPARE"
+    RESEARCH = "RESEARCH"
+    INVESTIGATE = "INVESTIGATE"
     DO_NOTHING = "DO_NOTHING"
 
 

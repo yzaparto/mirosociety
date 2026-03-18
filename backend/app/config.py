@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     max_concurrent_llm_calls: int = 10
+    search_enabled: bool = True
+    max_searches_per_round: int = 5
 
     model_config = {
         "env_file": [".env", str(_PROJECT_ROOT / ".env")],

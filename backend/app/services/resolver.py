@@ -347,6 +347,21 @@ class ActionResolver:
                 if len(other.working_memory) > 9:
                     other.working_memory = other.working_memory[-9:]
 
+        elif at == ActionType.RESEARCH:
+            agent.resources["knowledge"] = agent.resources.get("knowledge", 0) + 3
+            world_changes["research_query"] = action_args.get("query", "")
+
+        elif at == ActionType.INVESTIGATE:
+            raw_target = action_args.get("target_id")
+            target_id = self._resolve_agent_id(raw_target, agent_map)
+            if target_id is not None and target_id in agent_map:
+                targets = [target_id]
+                action_args["target_id"] = target_id
+                agent.resources["knowledge"] = agent.resources.get("knowledge", 0) + 2
+                self._update_relationship(agent, target_id, f"Investigated — asked about '{action_args.get('question', '')[:40]}'")
+                self._update_relationship(agent_map[target_id], agent.id, f"Was questioned by {agent.name}")
+                rel_changes[str(target_id)] = "investigated"
+
         return ActionEntry(
             round=round_num,
             day=world_state.day,
@@ -447,6 +462,11 @@ class ActionResolver:
                 d_adoption_rate -= 0.02
             elif at == ActionType.COMPARE:
                 d_word_of_mouth += 0.02
+            elif at == ActionType.RESEARCH:
+                d_trust += 0.005
+            elif at == ActionType.INVESTIGATE:
+                d_trust += 0.01
+                d_word_of_mouth += 0.01
 
             if a.world_state_changes.get("rule_passed"):
                 d_freedom -= 0.03
