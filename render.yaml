@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: mirosociety
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    envVars:
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://api.openai.com/v1
+      - key: LLM_MODEL
+        value: gpt-4o-mini
+    disk:
+      name: mirosociety-data
+      mountPath: /app/data
+      sizeGB: 1
+    healthCheckPath: /health

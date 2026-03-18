@@ -1,0 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-emerald-600/30;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+@layer components {
+  .narrative-text {
+    @apply font-serif text-lg leading-relaxed text-slate-200;
+  }
+
+  .agent-link {
+    @apply text-emerald-400 hover:text-emerald-300 cursor-pointer underline underline-offset-2 decoration-emerald-400/30 hover:decoration-emerald-300/50 transition-colors;
+  }
+
+  .metric-bar {
+    @apply h-2 rounded-full transition-all duration-300 ease-out;
+  }
+
+  .card {
+    @apply bg-slate-900 rounded-lg border border-slate-800 p-4 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply hover:bg-slate-800/80 hover:border-slate-700 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 cursor-pointer;
+  }
+
+  .btn-primary {
+    @apply bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-3 rounded-lg transition-all active:scale-[0.97];
+  }
+
+  .btn-secondary {
+    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-2 rounded-lg border border-slate-700 transition-all active:scale-[0.97];
+  }
+
+  .section-title {
+    @apply text-xl font-semibold mb-4;
+  }
+}
+
+@layer utilities {
+  /* Fade-in-up animation for scroll-triggered reveals */
+  .fade-in-up {
+    animation: fadeInUp 0.5s ease forwards;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Staggered entrance delays */
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
+
+  /* Shimmer effect for CTA buttons */
+  .shimmer {
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Gradient border glow */
+  .glow-border {
+    position: relative;
+  }
+  .glow-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #059669, #3b82f6, #059669);
+    background-size: 200% 200%;
+    animation: borderGlow 3s ease infinite;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  .glow-border:focus-within::before {
+    opacity: 1;
+  }
+
+  @keyframes borderGlow {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Typewriter cursor blink */
+  .cursor-blink::after {
+    content: '|';
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+}
+
+/* List transition helpers (used with TransitionGroup) */
+.list-enter-active {
+  transition: all 0.3s ease;
+}
+.list-leave-active {
+  transition: all 0.2s ease;
+}
+.list-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.list-leave-to {
+  opacity: 0;
+  transform: translateX(-12px);
+}
+.list-move {
+  transition: transform 0.3s ease;
+}
+
+/* Feed item transitions */
+.feed-enter-active {
+  transition: all 0.3s ease;
+}
+.feed-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  nav, .fixed, button, .btn-primary, .btn-secondary {
+    display: none !important;
+  }
+  .card, [class*="bg-slate"] {
+    background: white !important;
+    border-color: #e5e7eb !important;
+    color: black !important;
+  }
+  [class*="text-slate"] {
+    color: #374151 !important;
+  }
+  [class*="text-emerald"], [class*="text-blue"], [class*="text-amber"] {
+    color: #1f2937 !important;
+  }
+}
