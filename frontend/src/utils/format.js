@@ -12,7 +12,7 @@ export function nameSpan(name) {
 }
 
 export function locIcon(type) {
-  return { public: '🏛', commerce: '🏪', governance: '⚖️', residential: '🏠', social: '🍺' }[type] || '📍'
+  return { public: 'PUB', commerce: 'COM', governance: 'GOV', residential: 'RES', social: 'SOC' }[type] || 'LOC'
 }
 
 export function timeAgo(dateStr) {

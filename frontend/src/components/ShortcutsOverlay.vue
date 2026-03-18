@@ -23,7 +23,7 @@ const shortcuts = [
   { key: 'Space', label: 'Pause / Resume' },
   { key: '1', label: 'Normal speed (1×)' },
   { key: '2', label: 'Fast forward (5×)' },
-  { key: '3', label: 'Jump (⏩)' },
+  { key: '3', label: 'Jump (10×)' },
   { key: 'I', label: 'Inject event' },
   { key: 'F', label: 'Fork simulation' },
   { key: 'Escape', label: 'Deselect agent / Close modal' },

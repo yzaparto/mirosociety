@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from app.models.action import ActionEntry, ReactiveResponse, ActionType
+from app.models.action import ActionEntry, ReactiveResponse
 from app.models.world import WorldState, WorldMetrics
 from app.services.llm import LLMClient, parse_json
 from app.constants import TIMES_OF_DAY
@@ -225,10 +225,8 @@ class Narrator:
         agents = await store.get_all_agents(simulation_id)
         actions = await store.get_actions(simulation_id)
 
-        is_market = any(
-            a.action_type in (ActionType.PURCHASE, ActionType.ABANDON, ActionType.RECOMMEND, ActionType.COMPARE)
-            for a in actions
-        )
+        proposed_change = await store.get_meta(simulation_id, "proposed_change")
+        is_market = proposed_change is not None
 
         # --- Pass 0: Epoch summaries (existing logic) ---
         epoch_size = 30

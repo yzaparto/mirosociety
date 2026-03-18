@@ -190,6 +190,13 @@ class SimulationEngine:
         self._total_actions: dict[str, int] = {}
         self._last_narrative: dict[str, str] = {}
 
+    async def _wait_if_paused(self, simulation_id: str) -> bool:
+        """Block while paused. Returns False if the simulation was stopped."""
+        if simulation_id not in self._paused:
+            return False
+        await self._paused[simulation_id].wait()
+        return self._running.get(simulation_id, False)
+
     async def run(
         self,
         simulation_id: str,
@@ -213,7 +220,8 @@ class SimulationEngine:
 
         try:
             while round_num < total_rounds and self._running.get(simulation_id, False):
-                await self._paused[simulation_id].wait()
+                if not await self._wait_if_paused(simulation_id):
+                    break
 
                 round_num += 1
                 world_state.round_in_day = (round_num - 1) % world_state.blueprint.time_config.rounds_per_day
@@ -228,9 +236,15 @@ class SimulationEngine:
                     world_state, agents, sig_count, sim_id=simulation_id
                 )
 
+                if not await self._wait_if_paused(simulation_id):
+                    break
+
                 active = self._select_active_agents(world_state, agents, round_num, tension_event is not None)
 
                 decisions = await self._batch_decisions(active, world_state, agents)
+
+                if not await self._wait_if_paused(simulation_id):
+                    break
 
                 resolved_entries, world_state, agents = self.resolver.resolve(
                     decisions, world_state, agents, round_num
@@ -244,6 +258,9 @@ class SimulationEngine:
                 reactions: list[ReactiveResponse] = []
                 if speech_actions:
                     reactions = await self._reactive_micro_round(speech_actions, agents, world_state)
+
+                if not await self._wait_if_paused(simulation_id):
+                    break
 
                 self._total_actions[simulation_id] += len(resolved_entries)
 
@@ -831,18 +848,25 @@ class SimulationEngine:
         }
         return sum(1 for a in actions if a.action_type in significant_types)
 
-    async def pause(self, simulation_id: str):
+    async def pause(self, simulation_id: str) -> bool:
         if simulation_id in self._paused:
             self._paused[simulation_id].clear()
+            return True
+        return False
 
-    async def resume(self, simulation_id: str):
+    async def resume(self, simulation_id: str) -> bool:
         if simulation_id in self._paused:
             self._paused[simulation_id].set()
+            return True
+        return False
 
-    async def stop(self, simulation_id: str):
+    async def stop(self, simulation_id: str) -> bool:
+        if simulation_id not in self._running:
+            return False
         self._running[simulation_id] = False
         if simulation_id in self._paused:
             self._paused[simulation_id].set()
+        return True
 
     async def set_speed(self, simulation_id: str, mode: SpeedMode):
         self._speed[simulation_id] = mode

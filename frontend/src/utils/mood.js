@@ -64,10 +64,10 @@ export function moodNodeStroke(state) {
 export function speechBubbleClass(state) {
   const cat = moodCategory(state)
   return {
-    positive: 'bg-emerald-100 text-emerald-950',
-    uneasy: 'bg-amber-100 text-amber-950',
-    hostile: 'bg-red-100 text-red-950',
-    conflicted: 'bg-violet-100 text-violet-950',
-    neutral: 'bg-slate-200 text-slate-900',
+    positive: 'bg-slate-100 text-slate-900',
+    uneasy: 'bg-slate-100 text-slate-900',
+    hostile: 'bg-slate-100 text-slate-900',
+    conflicted: 'bg-slate-100 text-slate-900',
+    neutral: 'bg-slate-100 text-slate-900',
   }[cat]
 }

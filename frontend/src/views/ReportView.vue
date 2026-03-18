@@ -263,14 +263,14 @@
         </div>
 
         <!-- 8. Fork CTA -->
-        <div class="bg-blue-950/20 border border-blue-800/30 rounded-xl p-6 text-center">
-          <h3 class="font-semibold text-lg mb-1">What would have happened if...?</h3>
-          <p class="text-sm text-slate-400 mb-4">Fork this simulation to explore alternate timelines.</p>
+        <div class="bg-slate-900/60 border border-slate-800/40 rounded-xl p-6 text-center">
+          <h3 class="font-semibold text-lg mb-1">Explore alternate timelines</h3>
+          <p class="text-sm text-slate-400 mb-4">Fork this simulation to test different scenarios from the same starting point.</p>
           <router-link
             :to="`/simulation/${route.params.id}`"
             class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors active:scale-[0.97]"
           >
-            ⑂ Fork from this simulation
+            Fork from this simulation
           </router-link>
         </div>
 

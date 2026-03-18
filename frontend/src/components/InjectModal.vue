@@ -1,9 +1,7 @@
 <template>
   <BaseModal :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)">
     <div class="p-6 space-y-4">
-      <h3 class="font-semibold text-lg flex items-center gap-2">
-        <span class="text-amber-400">⚡</span> Inject Event
-      </h3>
+      <h3 class="font-semibold text-lg">Inject Event</h3>
       <p class="text-sm text-slate-400">Describe something that happens in the world. Citizens will react.</p>
       <textarea
         v-model="text"
@@ -20,7 +18,7 @@
           :disabled="!text.trim()"
           class="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97]"
         >
-          Inject ⚡
+          Inject
         </button>
       </div>
     </div>

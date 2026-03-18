@@ -71,6 +71,11 @@ export default {
     return data
   },
 
+  async cancel(simulationId) {
+    const { data } = await api.post(`/simulation/${simulationId}/cancel`)
+    return data
+  },
+
   async getReport(simulationId) {
     const { data } = await api.get(`/simulation/${simulationId}/report`)
     return data

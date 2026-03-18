@@ -61,7 +61,9 @@
 
       <!-- Empty state -->
       <div v-else-if="simulations.length === 0" class="text-center py-20">
-        <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl mx-auto mb-4">🔬</div>
+        <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-7 h-7 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+        </div>
         <p class="text-slate-500 mb-2">No simulations found.</p>
         <router-link to="/" class="text-sm text-emerald-400 hover:text-emerald-300 transition-colors">Run your first simulation →</router-link>
       </div>

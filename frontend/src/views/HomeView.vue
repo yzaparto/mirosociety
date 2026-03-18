@@ -6,8 +6,8 @@
         <h1 class="text-5xl font-bold tracking-tight mb-3">MiroSociety</h1>
         <div class="h-8 flex items-center justify-center">
           <Transition name="tagline" mode="out-in">
-            <p :key="currentTagline" class="text-slate-400 text-lg italic">
-              "{{ currentTagline }}"
+            <p :key="currentTagline" class="text-slate-500 text-lg">
+              {{ currentTagline }}
             </p>
           </Transition>
         </div>
@@ -15,14 +15,12 @@
 
       <!-- Input area -->
       <div class="max-w-2xl mx-auto space-y-4">
-        <div class="glow-border rounded-xl">
-          <textarea
-            v-model="rules"
-            rows="4"
-            class="w-full bg-slate-900 border border-slate-700/60 rounded-xl p-4 text-slate-100 placeholder-slate-500 focus:border-transparent focus:ring-0 outline-none resize-none text-lg leading-relaxed"
-            placeholder="Describe your world or scenario..."
-          ></textarea>
-        </div>
+        <textarea
+          v-model="rules"
+          rows="4"
+          class="w-full bg-slate-900 border border-slate-700/60 rounded-xl p-4 text-slate-100 placeholder-slate-500 focus:border-emerald-600/60 focus:ring-1 focus:ring-emerald-600/20 outline-none resize-none text-lg leading-relaxed transition-colors"
+          placeholder="Describe your world or scenario..."
+        ></textarea>
 
         <!-- Proposed Change (collapsible) -->
         <div class="border border-slate-700/60 rounded-xl overflow-hidden transition-all">
@@ -80,7 +78,7 @@
                 :class="[
                   'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border active:scale-[0.97]',
                   population === opt
-                    ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-900/30'
+                    ? 'bg-emerald-600 border-emerald-500 text-white'
                     : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
                 ]"
               >
@@ -98,7 +96,7 @@
                 :class="[
                   'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border active:scale-[0.97]',
                   duration === opt.value
-                    ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-900/30'
+                    ? 'bg-emerald-600 border-emerald-500 text-white'
                     : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300'
                 ]"
               >
@@ -115,7 +113,7 @@
           :class="[
             'w-full py-3.5 rounded-xl font-semibold text-lg transition-all active:scale-[0.98]',
             rules.trim() && !loading
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/30'
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed'
           ]"
         >
@@ -189,8 +187,8 @@
         <h2 class="text-sm font-medium text-slate-500 uppercase tracking-wider text-center mb-8">How It Works</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div v-for="(step, i) in howItWorks" :key="i" class="text-center">
-            <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-lg mx-auto mb-3">
-              {{ step.icon }}
+            <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 mx-auto mb-3">
+              {{ step.number }}
             </div>
             <h3 class="font-medium text-sm text-slate-200 mb-1">{{ step.title }}</h3>
             <p class="text-xs text-slate-500 leading-relaxed">{{ step.description }}</p>
@@ -233,9 +231,9 @@ const presetTabs = [
 ]
 
 const howItWorks = [
-  { icon: '✍️', title: '1. Describe your world', description: 'Set the rules, constraints, or market conditions. Add customer segments for market sims.' },
-  { icon: '🔬', title: '2. Watch it unfold', description: 'AI citizens interact, form alliances, trade, and react in real time on an interactive map.' },
-  { icon: '📊', title: '3. Read the analysis', description: 'Get an executive report with scorecard, insights, risks, and actionable recommendations.' },
+  { number: '01', title: 'Describe your world', description: 'Set the rules, constraints, or market conditions. Add customer segments for market sims.' },
+  { number: '02', title: 'Watch it unfold', description: 'Citizens interact, form alliances, trade, and react in real time on an interactive map.' },
+  { number: '03', title: 'Read the analysis', description: 'Get an executive report with scorecard, insights, risks, and actionable recommendations.' },
 ]
 
 const filteredPresets = computed(() => {

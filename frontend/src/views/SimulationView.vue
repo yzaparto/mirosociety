@@ -57,25 +57,25 @@
         <button @click="togglePause"
           class="text-xs px-3 py-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors active:scale-[0.97]"
           title="Space">
-          {{ paused ? '▶ Resume' : '⏸ Pause' }}
+          {{ paused ? 'Resume' : 'Pause' }}
         </button>
         <button @click="showInject = true"
           class="text-xs px-3 py-1.5 rounded-md hover:bg-amber-950/40 text-amber-500 hover:text-amber-400 transition-colors active:scale-[0.97]"
           title="I">
-          ⚡ Inject
+          Inject
         </button>
         <button @click="openFork()"
           class="text-xs px-3 py-1.5 rounded-md hover:bg-blue-950/40 text-blue-500 hover:text-blue-400 transition-colors active:scale-[0.97]"
           title="F">
-          ⑂ Fork
+          Fork
         </button>
         <button @click="stopSim"
           class="text-xs px-3 py-1.5 rounded-md hover:bg-red-950/40 text-red-500 hover:text-red-400 transition-colors active:scale-[0.97]">
-          ■ Stop
+          Stop
         </button>
       </template>
       <template v-if="phase === 'complete'">
-        <button @click="openFork()" class="text-xs px-3 py-1.5 rounded-md hover:bg-blue-950/40 text-blue-500 hover:text-blue-400 transition-colors active:scale-[0.97]">⑂ Fork</button>
+        <button @click="openFork()" class="text-xs px-3 py-1.5 rounded-md hover:bg-blue-950/40 text-blue-500 hover:text-blue-400 transition-colors active:scale-[0.97]">Fork</button>
         <router-link :to="`/report/${simId}`" class="text-xs px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white transition-colors active:scale-[0.97]">View Report →</router-link>
       </template>
     </div>
@@ -83,6 +83,17 @@
     <!-- ===== GENERATION PHASE ===== -->
     <div v-if="phase === 'generating'" class="flex-1 flex items-center justify-center">
       <div class="max-w-lg w-full px-6 space-y-6">
+        <!-- Cancel button -->
+        <div class="flex justify-end">
+          <button
+            @click="cancelSim"
+            :disabled="cancelling"
+            class="text-xs px-3 py-1.5 rounded-md hover:bg-red-950/40 text-red-500 hover:text-red-400 transition-colors active:scale-[0.97] disabled:opacity-50"
+          >
+            {{ cancelling ? 'Cancelling...' : 'Cancel' }}
+          </button>
+        </div>
+
         <!-- Progress stepper -->
         <div class="space-y-3">
           <div v-for="(step, i) in genSteps" :key="step.id"
@@ -160,7 +171,7 @@
               <div v-if="hoveredAgentId && agentMap[hoveredAgentId]"
                 class="fixed z-[55] pointer-events-none"
                 :style="getNodeTooltipStyle(hoveredAgentId)">
-                <div class="bg-slate-800/95 backdrop-blur-sm border border-slate-600 rounded-lg shadow-2xl px-3 py-2.5 min-w-[180px] max-w-[260px]">
+                <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-xl px-3 py-2.5 min-w-[180px] max-w-[260px]">
                   <div class="flex items-center gap-1.5 mb-1">
                     <MoodDot :state="agentMap[hoveredAgentId].emotional_state" />
                     <span class="text-[11px] font-semibold">{{ agentMap[hoveredAgentId].name }}</span>
@@ -177,19 +188,19 @@
 
             <!-- Zoom controls -->
             <div class="absolute bottom-3 right-3 flex flex-col gap-1 z-20">
-              <button @click="zoomIn" class="w-7 h-7 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center backdrop-blur-sm" title="Zoom in">+</button>
-              <button @click="zoomOut" class="w-7 h-7 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center backdrop-blur-sm" title="Zoom out">−</button>
-              <button @click="zoomReset" class="w-7 h-7 rounded-md bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-[9px] flex items-center justify-center backdrop-blur-sm" title="Reset zoom">⟳</button>
+              <button @click="zoomIn" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center" title="Zoom in">+</button>
+              <button @click="zoomOut" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center" title="Zoom out">−</button>
+              <button @click="zoomReset" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-[9px] flex items-center justify-center" title="Reset zoom">R</button>
             </div>
 
             <!-- Legend -->
             <div class="absolute bottom-3 left-3 z-20">
               <button @click="showLegend = !showLegend"
-                class="text-[9px] text-slate-500 hover:text-slate-300 bg-slate-800/80 backdrop-blur-sm border border-slate-700/60 rounded-md px-2 py-1 transition-colors">
+                class="text-[9px] text-slate-500 hover:text-slate-300 bg-slate-800 border border-slate-700/60 rounded-md px-2 py-1 transition-colors">
                 {{ showLegend ? '▼ Legend' : '▶ Legend' }}
               </button>
               <Transition name="feed">
-                <div v-if="showLegend" class="mt-1 bg-slate-800/90 backdrop-blur-sm border border-slate-700/60 rounded-lg p-2.5 space-y-1.5">
+                <div v-if="showLegend" class="mt-1 bg-slate-800 border border-slate-700/60 rounded-lg p-2.5 space-y-1.5">
                   <div v-for="item in legendItems" :key="item.label" class="flex items-center gap-2">
                     <div :class="['w-2.5 h-2.5 rounded-full', item.color]"></div>
                     <span class="text-[9px] text-slate-400">{{ item.label }}</span>
@@ -204,7 +215,7 @@
             <template #right>
               <div v-if="institutions.length" class="flex gap-2">
                 <span v-for="inst in institutions" :key="inst.name" class="text-[9px] text-violet-300 bg-violet-950/40 px-1.5 py-0.5 rounded">
-                  🏛 {{ inst.name }}
+                  {{ inst.name }}
                 </span>
               </div>
             </template>
@@ -274,7 +285,7 @@
 
               <template v-for="(group, gi) in groupedEvents" :key="gi">
                 <div class="sticky top-0 z-10 py-1.5">
-                  <div class="text-[10px] text-slate-500 font-medium uppercase tracking-wider bg-slate-950/90 backdrop-blur-sm py-1 px-2 rounded inline-block">
+                  <div class="text-[10px] text-slate-500 font-medium uppercase tracking-wider bg-slate-950 py-1 px-2 rounded inline-block">
                     Day {{ group.day }} · {{ group.tod }}
                   </div>
                 </div>
@@ -378,6 +389,7 @@ const showFork = ref(false)
 const forking = ref(false)
 const showShortcuts = ref(false)
 const showLegend = ref(false)
+const cancelling = ref(false)
 const agentSearch = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
@@ -430,7 +442,7 @@ let eventSource = null
 const speeds = [
   { id: 'live', label: '1×', active: 'bg-emerald-600 text-white', title: 'Normal speed (1)' },
   { id: 'fast_forward', label: '5×', active: 'bg-amber-600 text-white', title: 'Fast forward (2)' },
-  { id: 'jump', label: '⏩', active: 'bg-violet-600 text-white', title: 'Jump ahead (3)' },
+  { id: 'jump', label: '10×', active: 'bg-violet-600 text-white', title: 'Jump ahead (3)' },
 ]
 
 const legendItems = [
@@ -779,7 +791,7 @@ function processRound(actions, reactions, tensionEvent, narrative) {
 
   if (tensionEvent) {
     enqueue(() => {
-      addEvent(`<span class="text-amber-300 font-medium">⚡ ${tensionEvent}</span>`, { highlight: true })
+      addEvent(`<span class="text-amber-300 font-medium">${tensionEvent}</span>`, { highlight: true })
       addToast(tensionEvent, 'warning')
     })
   }
@@ -793,7 +805,7 @@ function processOneAction(a) {
   const agentIdNum = Number(a.agent_id)
 
   if (at === 'SPEAK_PUBLIC' && a.speech) {
-    addEvent(`💬 ${who}: <span class="text-slate-200">"${escapeHtml(a.speech)}"</span>`, { location: loc })
+    addEvent(`${who}: <span class="text-slate-200">"${escapeHtml(a.speech)}"</span>`, { location: loc })
     showSpeech(a.agent_id, a.speech)
     agentLastAction[a.agent_id] = `Said: "${a.speech.length > 50 ? a.speech.slice(0, 50) + '...' : a.speech}"`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
@@ -803,7 +815,7 @@ function processOneAction(a) {
   } else if (at === 'SPEAK_PRIVATE' && a.speech) {
     const targetId = a.targets?.[0]
     const target = targetId != null ? nameSpan(agentNameById(targetId)) : 'someone'
-    addEvent(`🤫 ${who} whispered to ${target}: <span class="text-slate-400 italic">"${escapeHtml(a.speech)}"</span>`, { location: loc })
+    addEvent(`${who} whispered to ${target}: <span class="text-slate-400 italic">"${escapeHtml(a.speech)}"</span>`, { location: loc })
     showSpeech(a.agent_id, a.speech)
     if (targetId != null) addGraphEdge(agentIdNum, Number(targetId), '#fbbf24')
     agentLastAction[a.agent_id] = `Whispered to ${targetId != null ? agentNameById(targetId) : 'someone'}`
@@ -812,59 +824,59 @@ function processOneAction(a) {
     const targetId = args.target_id
     const target = targetId != null ? nameSpan(agentNameById(targetId)) : 'someone'
     const detail = args.give_resource ? ` — ${args.give_amount || '?'} ${escapeHtml(args.give_resource)} for ${args.receive_amount || '?'} ${escapeHtml(args.receive_resource || '?')}` : ''
-    addEvent(`🤝 ${who} traded with ${target}${detail}`, { location: loc })
+    addEvent(`${who} traded with ${target}${detail}`, { location: loc })
     if (targetId != null) addGraphEdge(agentIdNum, Number(targetId), '#6ee7b7')
     agentLastAction[a.agent_id] = `Traded with ${targetId != null ? agentNameById(targetId) : 'someone'}`
   } else if (at === 'FORM_GROUP') {
     const gName = escapeHtml(a.action_args?.name || 'a group')
-    addEvent(`🏛 ${who} founded <span class="text-violet-300 font-medium">${gName}</span>`, { highlight: true, location: loc })
+    addEvent(`${who} founded <span class="text-violet-300 font-medium">${gName}</span>`, { highlight: true, location: loc })
     addToast(`${a.agent_name} founded "${a.action_args?.name || 'a group'}"`, 'institution')
     agentLastAction[a.agent_id] = `Founded ${a.action_args?.name || 'a group'}`
   } else if (at === 'PROPOSE_RULE') {
     const content = a.action_args?.content || a.speech || 'a new rule'
-    addEvent(`📜 ${who} proposed a rule: <span class="text-amber-200">"${escapeHtml(content)}"</span>`, { highlight: true, location: loc })
+    addEvent(`${who} proposed a rule: <span class="text-amber-200">"${escapeHtml(content)}"</span>`, { highlight: true, location: loc })
     agentLastAction[a.agent_id] = `Proposed: "${content.slice(0, 40)}..."`
   } else if (at === 'VOTE') {
     const vote = a.action_args?.vote === 'against' ? 'against' : 'for'
-    addEvent(`🗳 ${who} voted <span class="${vote === 'for' ? 'text-emerald-300' : 'text-red-300'} font-medium">${vote}</span>`, { location: loc })
+    addEvent(`${who} voted <span class="${vote === 'for' ? 'text-emerald-300' : 'text-red-300'} font-medium">${vote}</span>`, { location: loc })
     agentLastAction[a.agent_id] = `Voted ${vote}`
   } else if (at === 'PROTEST') {
     const target = escapeHtml(a.action_args?.target || 'the current order')
-    addEvent(`✊ ${who} protested <span class="text-red-300">${target}</span>`, { highlight: true, location: loc })
+    addEvent(`${who} protested <span class="text-red-300">${target}</span>`, { highlight: true, location: loc })
     addToast(`${a.agent_name} is protesting!`, 'warning')
     agentLastAction[a.agent_id] = `Protesting: ${(a.action_args?.target || 'the current order').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'DEFECT') {
     const how = escapeHtml(a.action_args?.how || 'broke the rules')
-    addEvent(`⚠️ ${who} <span class="text-red-400 font-medium">defected</span> — ${how}`, { highlight: true, location: loc })
+    addEvent(`${who} <span class="text-red-400 font-medium">defected</span> — ${how}`, { highlight: true, location: loc })
     addToast(`${a.agent_name} defected!`, 'danger')
     agentLastAction[a.agent_id] = `DEFECTED: ${(a.action_args?.how || 'broke the rules').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'BUILD') {
     const what = escapeHtml(a.action_args?.what || 'something')
-    addEvent(`🔨 ${who} built <span class="text-blue-300">${what}</span>`, { location: loc })
+    addEvent(`${who} built <span class="text-blue-300">${what}</span>`, { location: loc })
     agentLastAction[a.agent_id] = `Built ${a.action_args?.what || 'something'}`
   } else if (at === 'RECOMMEND') {
     const targetId = a.action_args?.target_id || a.targets?.[0]
     const target = targetId != null ? nameSpan(agentNameById(targetId)) : 'someone'
-    addEvent(`👍 ${who} recommended to ${target}`, { location: loc })
+    addEvent(`${who} recommended to ${target}`, { location: loc })
     if (targetId != null) addGraphEdge(agentIdNum, Number(targetId), '#6ee7b7')
     agentLastAction[a.agent_id] = `Recommended to ${targetId != null ? agentNameById(targetId) : 'someone'}`
   } else if (at === 'ABANDON') {
     const what = escapeHtml(a.action_args?.what || 'their position')
-    addEvent(`🚪 ${who} <span class="text-red-300">abandoned</span> ${what}`, { highlight: true, location: loc })
+    addEvent(`${who} <span class="text-red-300">abandoned</span> ${what}`, { highlight: true, location: loc })
     agentLastAction[a.agent_id] = `Abandoned: ${(a.action_args?.what || 'their position').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'COMPARE') {
-    addEvent(`<span class="text-slate-500">🔍 ${escapeHtml(a.agent_name)} compared options</span>`, { location: loc })
+    addEvent(`<span class="text-slate-500">${escapeHtml(a.agent_name)} compared options</span>`, { location: loc })
     agentLastAction[a.agent_id] = 'Comparing...'
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#94a3b8')
   } else if (at === 'OBSERVE') {
-    addEvent(`<span class="text-slate-500">👁 ${escapeHtml(a.agent_name)} observed the scene</span>`, { location: loc })
+    addEvent(`<span class="text-slate-500">${escapeHtml(a.agent_name)} observed the scene</span>`, { location: loc })
     agentLastAction[a.agent_id] = 'Observing...'
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#94a3b8')
@@ -873,14 +885,14 @@ function processOneAction(a) {
   }
 
   if (a.world_state_changes?.rule_passed) {
-    addEvent(`<span class="text-emerald-300 font-medium">✅ New community rule: "${escapeHtml(a.world_state_changes.rule_passed)}"</span>`, { highlight: true })
+    addEvent(`<span class="text-emerald-300 font-medium">New community rule: "${escapeHtml(a.world_state_changes.rule_passed)}"</span>`, { highlight: true })
     addToast('New rule passed!', 'info')
   }
   if (a.world_state_changes?.rule_rejected) {
-    addEvent(`<span class="text-red-300">❌ Rule rejected: "${escapeHtml(a.world_state_changes.rule_rejected)}"</span>`)
+    addEvent(`<span class="text-red-300">Rule rejected: "${escapeHtml(a.world_state_changes.rule_rejected)}"</span>`)
   }
   if (a.world_state_changes?.institution_created) {
-    addEvent(`<span class="text-violet-300 font-medium">🏛 New institution formed: ${escapeHtml(a.world_state_changes.institution_created)}</span>`, { highlight: true })
+    addEvent(`<span class="text-violet-300 font-medium">New institution formed: ${escapeHtml(a.world_state_changes.institution_created)}</span>`, { highlight: true })
   }
 }
 
@@ -888,11 +900,11 @@ function processOneReaction(r) {
   const loc = r.location || null
   if (r.reaction_type === 'respond' && r.content) {
     flashActor(r.agent_id)
-    addEvent(`↩ ${nameSpan(r.agent_name)}: <span class="text-sky-200">"${escapeHtml(r.content)}"</span>`, { location: loc })
+    addEvent(`${nameSpan(r.agent_name)}: <span class="text-sky-200">"${escapeHtml(r.content)}"</span>`, { location: loc })
     showSpeech(r.agent_id, r.content)
     agentLastAction[r.agent_id] = `Responded: "${r.content.slice(0, 40)}..."`
   } else if (r.reaction_type === 'whisper' && r.content) {
-    addEvent(`<span class="text-slate-400">🤫 ${escapeHtml(r.agent_name)} whispered back: <span class="italic">"${escapeHtml(r.content)}"</span></span>`, { location: loc })
+    addEvent(`<span class="text-slate-400">${escapeHtml(r.agent_name)} whispered back: <span class="italic">"${escapeHtml(r.content)}"</span></span>`, { location: loc })
     agentLastAction[r.agent_id] = 'Whispered a response'
   }
 }
@@ -919,6 +931,19 @@ async function stopSim() {
     addToast('Stopping simulation...', 'info')
     setTimeout(() => { if (phase.value === 'running') { phase.value = 'complete'; if (eventSource) eventSource.close() } }, 5000)
   } catch (err) { addToast('Failed to stop simulation', 'danger') }
+}
+
+async function cancelSim() {
+  cancelling.value = true
+  try {
+    await api.cancel(simId)
+    if (eventSource) { eventSource.close(); eventSource = null }
+    localStorage.removeItem('mirosociety_active_sim')
+    router.push('/')
+  } catch (err) {
+    addToast('Failed to cancel: ' + (err.response?.data?.detail || err.message || 'Unknown error'), 'danger')
+    cancelling.value = false
+  }
 }
 
 async function doInject(text) {
@@ -978,6 +1003,9 @@ watch(selectedAgentId, () => updateNodeAppearance())
 // ---- KEYBOARD SHORTCUTS ----
 function handleKeydown(e) {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+
+  if (e.key === 'Escape' && phase.value === 'generating') { cancelSim(); return }
+
   if (phase.value !== 'running' && phase.value !== 'complete') return
 
   if (e.key === ' ' && phase.value === 'running') { e.preventDefault(); togglePause() }
@@ -1014,12 +1042,11 @@ onMounted(() => {
 
   es.addEventListener('status', (e) => {
     const d = JSON.parse(e.data)
-    statusText.value = (d.data?.status || '').replace(/_/g, ' ')
+    statusText.value = (d.status || '').replace(/_/g, ' ')
   })
 
   es.addEventListener('world_ready', (e) => {
-    const d = JSON.parse(e.data)
-    const bp = d.data || d
+    const bp = JSON.parse(e.data)
     worldName.value = bp.name || ''
     worldDescription.value = bp.description || ''
     locations.value = bp.locations || []
@@ -1030,16 +1057,14 @@ onMounted(() => {
   })
 
   es.addEventListener('citizen_generated', (e) => {
-    const d = JSON.parse(e.data)
-    const c = d.data || d
+    const c = JSON.parse(e.data)
     citizens.value.push(c)
     agentMap[c.id] = c
     if (genSteps.value.find(s => s.id === 'citizens')?.status === 'pending') advanceGenStep('locations')
   })
 
   es.addEventListener('round_complete', (e) => {
-    const d = JSON.parse(e.data)
-    const rd = d.data || d
+    const rd = JSON.parse(e.data)
 
     if (phase.value !== 'running') {
       phase.value = 'running'
@@ -1081,6 +1106,13 @@ onMounted(() => {
     localStorage.removeItem('mirosociety_active_sim')
     es.close()
     eventSource = null
+  })
+
+  es.addEventListener('cancelled', () => {
+    localStorage.removeItem('mirosociety_active_sim')
+    es.close()
+    eventSource = null
+    router.push('/')
   })
 
   es.addEventListener('error', (e) => { console.error('SSE error:', e) })

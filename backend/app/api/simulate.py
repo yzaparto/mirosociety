@@ -79,6 +79,8 @@ async def simulate(req: SimulateRequest, request: Request):
 
     await store.create(sim_id, req.rules)
 
+    cancelled = request.app.state.cancelled_sims
+
     async def run_pipeline():
         event_queue = request.app.state.event_queues.get(sim_id)
         if not event_queue:
@@ -92,14 +94,27 @@ async def simulate(req: SimulateRequest, request: Request):
                 req.rules, req.population, req.duration_days,
                 proposed_change=req.proposed_change,
             )
+
+            if sim_id in cancelled:
+                await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
+                return
+
             await store.set_meta(sim_id, "blueprint", blueprint.model_dump())
+            if req.proposed_change:
+                await store.set_meta(sim_id, "proposed_change", req.proposed_change)
             await store.update_status(sim_id, SimulationStatus.GENERATING_WORLD.value, world_name=blueprint.name)
             await event_queue.put(SSEEvent(type="world_ready", data=blueprint.model_dump()))
+
+            if sim_id in cancelled:
+                await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
+                return
 
             await event_queue.put(SSEEvent(type="status", data={"status": "generating_citizens"}))
             await store.update_status(sim_id, SimulationStatus.GENERATING_CITIZENS.value)
 
             async def on_citizen(agent):
+                if sim_id in cancelled:
+                    raise asyncio.CancelledError()
                 await store.save_agent(sim_id, agent)
                 await event_queue.put(SSEEvent(type="citizen_generated", data=agent.model_dump()))
 
@@ -109,6 +124,10 @@ async def simulate(req: SimulateRequest, request: Request):
                 proposed_change=req.proposed_change,
                 segments=segments_dicts,
             )
+
+            if sim_id in cancelled:
+                await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
+                return
 
             world_state = WorldState(
                 blueprint=blueprint,
@@ -123,9 +142,14 @@ async def simulate(req: SimulateRequest, request: Request):
 
             await engine.run(sim_id, world_state, agents, emit)
 
+        except asyncio.CancelledError:
+            logger.info("Pipeline cancelled for %s", sim_id)
+            await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
         except Exception as e:
             logger.error("Pipeline failed for %s: %s", sim_id, e, exc_info=True)
             await event_queue.put(SSEEvent(type="error", data={"message": str(e)}))
+        finally:
+            cancelled.discard(sim_id)
 
     request.app.state.event_queues[sim_id] = asyncio.Queue()
     asyncio.create_task(run_pipeline())
@@ -147,7 +171,7 @@ async def stream(sim_id: str, request: Request):
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30)
                     yield {"event": event.type, "data": _serialize_event_data(event.data)}
-                    if event.type in ("simulation_complete", "error"):
+                    if event.type in ("simulation_complete", "error", "cancelled"):
                         break
                 except asyncio.TimeoutError:
                     yield {"event": "keepalive", "data": "{}"}
@@ -202,20 +226,39 @@ async def set_speed(sim_id: str, req: SpeedRequest, request: Request):
 
 @router.post("/simulation/{sim_id}/pause")
 async def pause(sim_id: str, request: Request):
-    await request.app.state.engine.pause(sim_id)
+    found = await request.app.state.engine.pause(sim_id)
+    if not found:
+        raise HTTPException(404, "Simulation not running")
     return {"status": "paused"}
 
 
 @router.post("/simulation/{sim_id}/resume")
 async def resume(sim_id: str, request: Request):
-    await request.app.state.engine.resume(sim_id)
+    found = await request.app.state.engine.resume(sim_id)
+    if not found:
+        raise HTTPException(404, "Simulation not running")
     return {"status": "resumed"}
 
 
 @router.post("/simulation/{sim_id}/stop")
 async def stop(sim_id: str, request: Request):
-    await request.app.state.engine.stop(sim_id)
+    found = await request.app.state.engine.stop(sim_id)
+    if not found:
+        raise HTTPException(404, "Simulation not running")
     return {"status": "stopped"}
+
+
+@router.post("/simulation/{sim_id}/cancel")
+async def cancel(sim_id: str, request: Request):
+    engine = request.app.state.engine
+    cancelled = request.app.state.cancelled_sims
+
+    stopped = await engine.stop(sim_id)
+    if stopped:
+        return {"status": "stopped"}
+
+    cancelled.add(sim_id)
+    return {"status": "cancelled"}
 
 
 @router.get("/simulation/{sim_id}/report")

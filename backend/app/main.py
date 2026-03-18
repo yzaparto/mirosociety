@@ -54,6 +54,7 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.narrator = narrator
     app.state.event_queues = {}
+    app.state.cancelled_sims = set()
 
     logger.info("MiroSociety started — LLM: %s @ %s", settings.llm_model, settings.llm_base_url)
     yield

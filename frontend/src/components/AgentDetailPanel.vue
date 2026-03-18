@@ -1,6 +1,6 @@
 <template>
   <Transition name="slide-panel">
-    <div v-if="agent" class="w-72 shrink-0 border-l border-slate-800/60 overflow-y-auto bg-slate-950/80 backdrop-blur-sm">
+    <div v-if="agent" class="w-72 shrink-0 border-l border-slate-800/60 overflow-y-auto bg-slate-950">
       <div class="p-4 space-y-1">
         <!-- Header -->
         <div class="flex justify-between items-start">

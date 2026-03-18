@@ -44,7 +44,7 @@
   }
 
   .card-hover {
-    @apply hover:bg-slate-800/80 hover:border-slate-700 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 cursor-pointer;
+    @apply hover:bg-slate-800/80 hover:border-slate-700 cursor-pointer;
   }
 
   .btn-primary {
@@ -85,57 +85,6 @@
   .stagger-5 { animation-delay: 250ms; }
   .stagger-6 { animation-delay: 300ms; }
 
-  /* Shimmer effect for CTA buttons */
-  .shimmer {
-    background-size: 200% 100%;
-    animation: shimmer 2s ease-in-out infinite;
-  }
-
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  /* Gradient border glow */
-  .glow-border {
-    position: relative;
-  }
-  .glow-border::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, #059669, #3b82f6, #059669);
-    background-size: 200% 200%;
-    animation: borderGlow 3s ease infinite;
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    pointer-events: none;
-  }
-  .glow-border:focus-within::before {
-    opacity: 1;
-  }
-
-  @keyframes borderGlow {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-  }
-
-  /* Typewriter cursor blink */
-  .cursor-blink::after {
-    content: '|';
-    animation: blink 1s step-end infinite;
-  }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
-  }
 }
 
 /* List transition helpers (used with TransitionGroup) */
