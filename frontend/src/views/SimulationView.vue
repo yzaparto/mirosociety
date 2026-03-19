@@ -1,166 +1,163 @@
 <template>
-  <div class="h-screen flex flex-col overflow-hidden bg-slate-950 text-slate-200">
+  <div class="h-screen flex flex-col overflow-hidden bg-[#fafafa] text-slate-800">
     <!-- Toasts -->
     <ToastContainer :toasts="toasts" @dismiss="dismissToast" />
 
     <!-- Shortcuts overlay -->
     <ShortcutsOverlay v-model="showShortcuts" />
 
-    <!-- Top bar - Row 1: Info -->
-    <div class="h-11 border-b border-slate-800/60 flex items-center px-4 gap-3 shrink-0">
-      <router-link to="/" class="text-slate-500 hover:text-slate-300 text-sm transition-colors">←</router-link>
-      <h1 class="font-semibold text-sm truncate">{{ worldName || 'Generating...' }}</h1>
-      <div v-if="currentDay" class="text-[11px] text-slate-400 bg-slate-800/60 px-2 py-0.5 rounded font-mono">
+    <!-- Top bar -->
+    <div class="h-12 border-b border-gray-200/80 flex items-center px-5 gap-3 shrink-0 bg-white">
+      <router-link to="/" class="text-slate-400 hover:text-slate-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </router-link>
+      <h1 class="font-semibold text-sm text-slate-900 truncate">{{ worldName || 'Generating...' }}</h1>
+      <div v-if="currentDay" class="text-[11px] text-slate-500 bg-gray-100 px-2.5 py-1 rounded-md font-mono">
         Day {{ currentDay }} · {{ currentTimeOfDay }}
       </div>
-      <div v-if="phase === 'generating'" class="flex items-center gap-1.5">
-        <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-        <span class="text-[11px] text-emerald-400">Generating</span>
+      <div v-if="phase === 'generating'" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1">
+        <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+        <span class="text-[11px] text-emerald-700 font-medium">Generating</span>
       </div>
-      <div v-if="phase === 'running'" class="flex items-center gap-1.5">
-        <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-        <span class="text-[11px] text-emerald-400">Live</span>
+      <div v-if="phase === 'running'" class="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1">
+        <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+        <span class="text-[11px] text-emerald-700 font-medium">Live</span>
       </div>
-      <div v-if="phase === 'complete'" class="text-[11px] text-slate-500 bg-slate-800/40 px-2 py-0.5 rounded">Complete</div>
+      <div v-if="phase === 'complete'" class="text-[11px] text-slate-500 bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-md font-medium">Complete</div>
+
       <div class="flex-1"></div>
-      <button @click="showShortcuts = true" class="text-slate-600 hover:text-slate-400 text-xs transition-colors" title="Keyboard shortcuts">?</button>
-      <a
-        href="https://github.com/yzaparto/mirosociety"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="flex items-center gap-1.5 text-slate-500 hover:text-white transition-colors"
-        title="Star on GitHub"
-      >
-        <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-        </svg>
-        <span class="text-[11px]">Star</span>
-      </a>
-    </div>
 
-    <!-- Top bar - Row 2: Controls -->
-    <div v-if="phase === 'running' || phase === 'complete'" class="h-10 border-b border-slate-800/40 flex items-center justify-center px-4 gap-2 shrink-0 bg-slate-900/20">
-      <!-- View toggle with sliding indicator -->
-      <div class="view-toggle relative flex bg-slate-800/50 rounded-lg p-0.5 border border-slate-700/40">
-        <div class="view-toggle-indicator absolute top-0.5 bottom-0.5 rounded-md bg-emerald-600 shadow-sm shadow-emerald-900/40 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          :style="{ left: viewMode === 'map' ? '2px' : '50%', width: 'calc(50% - 2px)' }"></div>
-        <button @click="viewMode = 'map'"
-          :class="['relative z-10 flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-md transition-colors duration-200 font-medium', viewMode === 'map' ? 'text-white' : 'text-slate-400 hover:text-slate-200']">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2a10 10 0 100 20 10 10 0 000-20z" opacity="0.3"/><path d="M19.07 4.93l-3.54 3.54M4.93 19.07l3.54-3.54M19.07 19.07l-3.54-3.54M4.93 4.93l3.54 3.54"/></svg>
-          <span>Map</span>
-          <span v-if="viewMode !== 'map'" class="text-[10px] text-slate-500 hidden sm:inline">Network</span>
-        </button>
-        <button @click="viewMode = 'feed'"
-          :class="['relative z-10 flex items-center gap-1.5 text-xs px-4 py-1.5 rounded-md transition-colors duration-200 font-medium', viewMode === 'feed' ? 'text-white' : 'text-slate-400 hover:text-slate-200']">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h10"/></svg>
-          <span>Feed</span>
-          <span v-if="viewMode !== 'feed'" class="text-[10px] text-slate-500 hidden sm:inline">Events</span>
-        </button>
-      </div>
-
-      <div class="w-px h-5 bg-slate-800/60"></div>
-
-      <template v-if="phase === 'running'">
-        <!-- Speed controls -->
-        <div class="flex gap-0.5 bg-slate-800/40 rounded-lg p-0.5">
-          <button v-for="s in speeds" :key="s.id" @click="doSetSpeed(s.id)"
-            :class="['text-[11px] px-2.5 py-1 rounded-md transition-all duration-200 font-medium', speed === s.id ? s.active : 'text-slate-500 hover:text-slate-300']"
-            :title="s.title">
-            {{ s.label }}
+      <!-- Controls (inline when running) -->
+      <template v-if="phase === 'running' || phase === 'complete'">
+        <div class="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+          <button @click="viewMode = 'map'"
+            :class="['text-[11px] px-2.5 py-1 rounded-md transition-all duration-150 font-medium', viewMode === 'map' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+            Map
+          </button>
+          <button v-if="isWideScreen" @click="viewMode = 'split'"
+            :class="['text-[11px] px-2.5 py-1 rounded-md transition-all duration-150 font-medium', viewMode === 'split' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+            Split
+          </button>
+          <button @click="viewMode = 'feed'"
+            :class="['text-[11px] px-2.5 py-1 rounded-md transition-all duration-150 font-medium', viewMode === 'feed' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700']">
+            Feed
           </button>
         </div>
 
-        <div class="w-px h-5 bg-slate-800/60"></div>
+        <div class="w-px h-4 bg-gray-200"></div>
 
-        <button @click="togglePause"
-          class="text-xs px-3 py-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors active:scale-[0.97]"
-          title="Space">
-          {{ paused ? 'Resume' : 'Pause' }}
-        </button>
-        <button @click="showInject = true"
-          class="text-xs px-3 py-1.5 rounded-md hover:bg-amber-950/40 text-amber-500 hover:text-amber-400 transition-colors active:scale-[0.97]"
-          title="I">
-          Inject
-        </button>
-        <button @click="openFork()"
-          class="text-xs px-3 py-1.5 rounded-md hover:bg-blue-950/40 text-blue-500 hover:text-blue-400 transition-colors active:scale-[0.97]"
-          title="F">
-          Fork
-        </button>
-        <button @click="stopSim"
-          class="text-xs px-3 py-1.5 rounded-md hover:bg-red-950/40 text-red-500 hover:text-red-400 transition-colors active:scale-[0.97]">
-          Stop
-        </button>
+        <template v-if="phase === 'running'">
+          <div class="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+            <button v-for="s in speeds" :key="s.id" @click="doSetSpeed(s.id)"
+              :class="['text-[11px] px-2 py-1 rounded-md transition-all duration-150 font-medium', speed === s.id ? s.active : 'text-slate-500 hover:text-slate-700']"
+              :title="s.title">
+              {{ s.label }}
+            </button>
+          </div>
+
+          <div class="w-px h-4 bg-gray-200"></div>
+
+          <button @click="togglePause"
+            class="text-[11px] px-2.5 py-1 rounded-md hover:bg-gray-100 text-slate-600 hover:text-slate-900 transition-colors font-medium"
+            title="Space">
+            {{ paused ? 'Resume' : 'Pause' }}
+          </button>
+          <button @click="showInject = true"
+            class="text-[11px] px-2.5 py-1 rounded-md hover:bg-amber-50 text-amber-600 hover:text-amber-700 transition-colors font-medium"
+            title="I">
+            Inject
+          </button>
+          <button @click="openFork()"
+            class="text-[11px] px-2.5 py-1 rounded-md hover:bg-blue-50 text-blue-600 hover:text-blue-700 transition-colors font-medium"
+            title="F">
+            Fork
+          </button>
+          <button @click="stopSim"
+            class="text-[11px] px-2.5 py-1 rounded-md hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors font-medium">
+            Stop
+          </button>
+        </template>
+        <template v-if="phase === 'complete'">
+          <button @click="openFork()" class="text-[11px] px-2.5 py-1 rounded-md hover:bg-blue-50 text-blue-600 font-medium transition-colors">Fork</button>
+          <router-link :to="`/report/${simId}`" class="text-[11px] px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors shadow-sm">View Report →</router-link>
+        </template>
       </template>
-      <template v-if="phase === 'complete'">
-        <button @click="openFork()" class="text-xs px-3 py-1.5 rounded-md hover:bg-blue-950/40 text-blue-500 hover:text-blue-400 transition-colors active:scale-[0.97]">Fork</button>
-        <router-link :to="`/report/${simId}`" class="text-xs px-4 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white transition-colors active:scale-[0.97]">View Report →</router-link>
-      </template>
+
+      <button @click="showShortcuts = true" class="text-slate-400 hover:text-slate-600 transition-colors" title="Keyboard shortcuts">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/></svg>
+      </button>
     </div>
 
     <!-- ===== GENERATION PHASE ===== -->
-    <div v-if="phase === 'generating'" class="flex-1 flex items-center justify-center">
-      <div class="max-w-lg w-full px-6 space-y-6">
-        <!-- Cancel button -->
-        <div class="flex justify-end">
-          <button
-            @click="cancelSim"
-            :disabled="cancelling"
-            class="text-xs px-3 py-1.5 rounded-md hover:bg-red-950/40 text-red-500 hover:text-red-400 transition-colors active:scale-[0.97] disabled:opacity-50"
-          >
-            {{ cancelling ? 'Cancelling...' : 'Cancel' }}
-          </button>
-        </div>
+    <div v-if="phase === 'generating'" class="flex-1 relative overflow-hidden">
+      <!-- Background swarm of citizens floating -->
+      <GenerationSwarm :citizens="citizens" />
 
-        <!-- Progress stepper -->
-        <div class="space-y-3">
-          <div v-for="(step, i) in genSteps" :key="step.id"
-            :class="['flex items-center gap-3 transition-all duration-500', { 'opacity-40': step.status === 'pending' }]"
-            :style="{ transitionDelay: (i * 50) + 'ms' }">
-            <div v-if="step.status === 'done'" class="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
-              <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+      <!-- Centered card overlay -->
+      <div class="absolute inset-0 z-20 flex items-center justify-center p-6 pointer-events-none">
+        <div class="max-w-lg w-full bg-white/95 backdrop-blur-md rounded-2xl shadow-xl shadow-black/8 border border-gray-200/60 overflow-hidden pointer-events-auto">
+          <!-- Header bar -->
+          <div class="flex items-center justify-between px-6 pt-5 pb-0">
+            <div>
+              <h3 class="text-base font-semibold text-slate-800">Setting up simulation</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Building your world...</p>
             </div>
-            <div v-else-if="step.status === 'active'" class="w-5 h-5 rounded-full border-2 border-emerald-400 flex items-center justify-center shrink-0">
-              <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-            </div>
-            <div v-else class="w-5 h-5 rounded-full border border-slate-700 shrink-0"></div>
-            <span :class="['text-sm', step.status === 'active' ? 'text-emerald-400' : step.status === 'done' ? 'text-slate-300' : 'text-slate-600']">
-              {{ step.label }}
-            </span>
+            <button
+              @click="cancelSim"
+              :disabled="cancelling"
+              class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors active:scale-95 disabled:opacity-40"
+              :title="cancelling ? 'Cancelling...' : 'Cancel'"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
           </div>
-        </div>
 
-        <!-- World info (revealed when ready) -->
-        <Transition name="feed">
-          <div v-if="worldName" class="space-y-2">
-            <h2 class="text-2xl font-bold">{{ worldName }}</h2>
-            <p class="text-slate-400 text-sm leading-relaxed">{{ worldDescription }}</p>
-            <div v-if="locations.length" class="flex flex-wrap gap-1.5 mt-3">
-              <TransitionGroup name="list">
-                <span v-for="loc in locations" :key="loc.id"
-                  class="text-[11px] px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
-                  {{ locIcon(loc.type) }} {{ loc.name }}
-                </span>
-              </TransitionGroup>
-            </div>
-          </div>
-        </Transition>
-
-        <!-- Citizens (staggered reveal) -->
-        <div v-if="citizens.length" class="space-y-3">
-          <p class="text-[11px] text-slate-500 uppercase tracking-wider">Citizens ({{ citizens.length }} generated)</p>
-          <div class="grid grid-cols-2 gap-1.5">
-            <TransitionGroup name="list">
-              <div v-for="c in citizens" :key="c.id"
-                class="flex items-center gap-2 px-2.5 py-2 rounded-lg bg-slate-900/60 border border-slate-800/60">
-                <MoodDot :state="c.emotional_state" />
-                <div class="min-w-0">
-                  <div class="text-sm font-medium truncate">{{ c.name }}</div>
-                  <div class="text-[11px] text-slate-500">{{ c.role }}</div>
+          <!-- Progress stepper -->
+          <div class="px-6 py-5">
+            <div class="relative space-y-0">
+              <div v-for="(step, i) in genSteps" :key="step.id"
+                :class="['flex items-start gap-3 transition-all duration-500 relative', { 'opacity-35': step.status === 'pending' }]"
+                :style="{ transitionDelay: (i * 60) + 'ms' }">
+                <div class="flex flex-col items-center shrink-0">
+                  <div v-if="step.status === 'done'" class="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  </div>
+                  <div v-else-if="step.status === 'active'" class="w-6 h-6 rounded-full border-2 border-emerald-400 flex items-center justify-center">
+                    <div class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                  </div>
+                  <div v-else class="w-6 h-6 rounded-full border-2 border-gray-200"></div>
+                  <div v-if="i < genSteps.length - 1"
+                    :class="['w-0.5 h-5 my-0.5 rounded-full transition-colors duration-300',
+                      step.status === 'done' ? 'bg-emerald-300' : 'bg-gray-200']">
+                  </div>
                 </div>
+                <span :class="['text-sm pt-0.5', step.status === 'active' ? 'text-emerald-600 font-medium' : step.status === 'done' ? 'text-slate-600' : 'text-slate-400']">
+                  {{ step.label }}
+                </span>
               </div>
-            </TransitionGroup>
+            </div>
           </div>
+
+          <!-- World info (revealed when ready) -->
+          <Transition name="feed">
+            <div v-if="worldName" class="border-t border-gray-100 px-6 py-5 space-y-3">
+              <h2 class="text-xl font-bold text-slate-800">{{ worldName }}</h2>
+              <p class="text-slate-500 text-sm leading-relaxed">{{ worldDescription }}</p>
+              <div v-if="locations.length" class="flex flex-wrap gap-1.5 pt-1">
+                <TransitionGroup name="list">
+                  <span v-for="loc in locations" :key="loc.id"
+                    class="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 border border-gray-200 text-slate-500">
+                    {{ locIcon(loc.type) }} {{ loc.name }}
+                  </span>
+                </TransitionGroup>
+              </div>
+
+              <!-- Citizens counter -->
+              <div v-if="citizens.length" class="pt-2">
+                <p class="text-[11px] text-slate-400 font-medium">{{ citizens.length }} citizens generated — appearing behind this card</p>
+              </div>
+            </div>
+          </Transition>
         </div>
       </div>
     </div>
@@ -171,14 +168,14 @@
       <!-- ========== MAP VIEW ========== -->
       <template v-if="viewMode === 'map'">
         <div class="flex-1 flex flex-col overflow-hidden">
-          <div class="flex-1 relative overflow-hidden" ref="graphContainer">
+          <div class="flex-1 relative overflow-hidden bg-white" ref="graphContainer">
             <svg ref="graphSvg" class="w-full h-full"></svg>
 
             <!-- Speech bubbles -->
             <div v-for="(text, agentId) in speechBubbles" :key="agentId"
               class="fixed z-[60] speech-bubble-anim pointer-events-none"
               :style="getNodeBubbleStyle(agentId)">
-              <div :class="['text-[10px] px-2.5 py-1.5 rounded-xl shadow-xl max-w-[220px] leading-snug',
+              <div :class="['text-[11px] px-3 py-2 rounded-xl shadow-lg max-w-[240px] leading-snug',
                 speechBubbleClass(agentMap[agentId]?.emotional_state)]">
                 "{{ text }}"
               </div>
@@ -189,15 +186,15 @@
               <div v-if="hoveredAgentId && agentMap[hoveredAgentId]"
                 class="fixed z-[55] pointer-events-none"
                 :style="getNodeTooltipStyle(hoveredAgentId)">
-                <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-xl px-3 py-2.5 min-w-[180px] max-w-[260px]">
-                  <div class="flex items-center gap-1.5 mb-1">
+                <div class="bg-white border border-gray-200 rounded-xl shadow-lg px-3.5 py-3 min-w-[190px] max-w-[260px]">
+                  <div class="flex items-center gap-2 mb-1.5">
                     <MoodDot :state="agentMap[hoveredAgentId].emotional_state" />
-                    <span class="text-[11px] font-semibold">{{ agentMap[hoveredAgentId].name }}</span>
-                    <span class="text-[9px] text-slate-500">{{ agentMap[hoveredAgentId].role }}</span>
+                    <span class="text-xs font-semibold text-slate-900">{{ agentMap[hoveredAgentId].name }}</span>
+                    <span class="text-[10px] text-slate-400">{{ agentMap[hoveredAgentId].role }}</span>
                   </div>
-                  <div class="text-[10px] text-slate-400 italic">{{ agentMap[hoveredAgentId].emotional_state }}</div>
-                  <div v-if="agentMap[hoveredAgentId].faction" class="text-[9px] text-violet-300 mt-0.5">{{ agentMap[hoveredAgentId].faction }}</div>
-                  <div v-if="agentLastAction[hoveredAgentId]" class="text-[10px] text-slate-300 mt-1.5 border-t border-slate-700 pt-1.5">
+                  <div class="text-[11px] text-slate-500 italic capitalize">{{ agentMap[hoveredAgentId].emotional_state }}</div>
+                  <div v-if="agentMap[hoveredAgentId].faction" class="text-[10px] text-violet-600 mt-0.5 font-medium">{{ agentMap[hoveredAgentId].faction }}</div>
+                  <div v-if="agentLastAction[hoveredAgentId]" class="text-[11px] text-slate-700 mt-2 pt-2 border-t border-gray-100">
                     {{ agentLastAction[hoveredAgentId] }}
                   </div>
                 </div>
@@ -205,26 +202,47 @@
             </Transition>
 
             <!-- Zoom controls -->
-            <div class="absolute bottom-3 right-3 flex flex-col gap-1 z-20">
-              <button @click="zoomIn" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center" title="Zoom in">+</button>
-              <button @click="zoomOut" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-sm flex items-center justify-center" title="Zoom out">−</button>
-              <button @click="zoomReset" class="w-7 h-7 rounded-md bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-[9px] flex items-center justify-center" title="Reset zoom">R</button>
+            <div class="absolute bottom-4 right-4 flex flex-col gap-1 z-20">
+              <button @click="zoomIn" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-sm flex items-center justify-center" title="Zoom in">+</button>
+              <button @click="zoomOut" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-sm flex items-center justify-center" title="Zoom out">−</button>
+              <button @click="zoomReset" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-[10px] font-medium flex items-center justify-center" title="Reset zoom">R</button>
             </div>
 
-            <!-- Legend -->
-            <div class="absolute bottom-3 left-3 z-20">
-              <button @click="showLegend = !showLegend"
-                class="text-[9px] text-slate-500 hover:text-slate-300 bg-slate-800 border border-slate-700/60 rounded-md px-2 py-1 transition-colors">
-                {{ showLegend ? '▼ Legend' : '▶ Legend' }}
-              </button>
-              <Transition name="feed">
-                <div v-if="showLegend" class="mt-1 bg-slate-800 border border-slate-700/60 rounded-lg p-2.5 space-y-1.5">
-                  <div v-for="item in legendItems" :key="item.label" class="flex items-center gap-2">
-                    <div :class="['w-2.5 h-2.5 rounded-full', item.color]"></div>
-                    <span class="text-[9px] text-slate-400">{{ item.label }}</span>
+            <!-- Legend & social link toggle -->
+            <div class="absolute bottom-4 left-4 z-20 flex items-end gap-1.5">
+              <div>
+                <button @click="showLegend = !showLegend"
+                  class="text-[10px] text-slate-500 hover:text-slate-700 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg px-2.5 py-1.5 transition-colors shadow-sm font-medium">
+                  {{ showLegend ? '▼ Legend' : '▶ Legend' }}
+                </button>
+                <Transition name="feed">
+                  <div v-if="showLegend" class="mt-1.5 bg-white border border-gray-200 rounded-xl p-3 shadow-lg space-y-2">
+                    <div v-for="item in legendItems" :key="item.label" class="flex items-center gap-2">
+                      <div :class="['w-2.5 h-2.5 rounded-full', item.color]"></div>
+                      <span class="text-[10px] text-slate-600">{{ item.label }}</span>
+                    </div>
+                    <div class="border-t border-gray-100 pt-2 mt-2 space-y-1.5">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-5 h-1.5" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#34d399" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+                        <span class="text-[10px] text-slate-500">Positive bond</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <svg class="w-5 h-1.5" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+                        <span class="text-[10px] text-slate-500">Neutral bond</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <svg class="w-5 h-1.5" viewBox="0 0 20 6"><line x1="0" y1="3" x2="20" y2="3" stroke="#f87171" stroke-width="1.5" stroke-dasharray="3 3"/></svg>
+                        <span class="text-[10px] text-slate-500">Negative bond</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </Transition>
+                </Transition>
+              </div>
+              <button @click="showSocialLinks = !showSocialLinks; renderSocialLinks()"
+                :class="['text-[10px] bg-white/90 backdrop-blur-sm border rounded-lg px-2.5 py-1.5 transition-colors shadow-sm font-medium',
+                  showSocialLinks ? 'text-emerald-600 border-emerald-300 hover:text-emerald-500' : 'text-slate-500 border-gray-200 hover:text-slate-700']">
+                {{ showSocialLinks ? '◉ Bonds' : '○ Bonds' }}
+              </button>
             </div>
           </div>
 
@@ -232,7 +250,7 @@
           <MetricsStrip :metrics="metrics" :prev-metrics="prevMetrics" :show-market="isMarketSim">
             <template #right>
               <div v-if="institutions.length" class="flex gap-2">
-                <span v-for="inst in institutions" :key="inst.name" class="text-[9px] text-violet-300 bg-violet-950/40 px-1.5 py-0.5 rounded">
+                <span v-for="inst in institutions" :key="inst.name" class="text-[10px] text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-md font-medium">
                   {{ inst.name }}
                 </span>
               </div>
@@ -241,18 +259,144 @@
         </div>
       </template>
 
+      <!-- ========== SPLIT VIEW ========== -->
+      <template v-if="viewMode === 'split'">
+        <!-- LEFT: Map -->
+        <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
+          <div class="flex-1 relative overflow-hidden bg-white" ref="splitGraphContainer">
+            <svg ref="splitGraphSvg" class="w-full h-full"></svg>
+
+            <!-- Speech bubbles -->
+            <div v-for="(text, agentId) in speechBubbles" :key="agentId"
+              class="fixed z-[60] speech-bubble-anim pointer-events-none"
+              :style="getNodeBubbleStyle(agentId)">
+              <div :class="['text-[11px] px-3 py-2 rounded-xl shadow-lg max-w-[240px] leading-snug',
+                speechBubbleClass(agentMap[agentId]?.emotional_state)]">
+                "{{ text }}"
+              </div>
+            </div>
+
+            <!-- Hover tooltip -->
+            <Transition name="feed">
+              <div v-if="hoveredAgentId && agentMap[hoveredAgentId]"
+                class="fixed z-[55] pointer-events-none"
+                :style="getNodeTooltipStyle(hoveredAgentId)">
+                <div class="bg-white border border-gray-200 rounded-xl shadow-lg px-3.5 py-3 min-w-[190px] max-w-[260px]">
+                  <div class="flex items-center gap-2 mb-1.5">
+                    <MoodDot :state="agentMap[hoveredAgentId].emotional_state" />
+                    <span class="text-xs font-semibold text-slate-900">{{ agentMap[hoveredAgentId].name }}</span>
+                    <span class="text-[10px] text-slate-400">{{ agentMap[hoveredAgentId].role }}</span>
+                  </div>
+                  <div class="text-[11px] text-slate-500 italic capitalize">{{ agentMap[hoveredAgentId].emotional_state }}</div>
+                  <div v-if="agentMap[hoveredAgentId].faction" class="text-[10px] text-violet-600 mt-0.5 font-medium">{{ agentMap[hoveredAgentId].faction }}</div>
+                  <div v-if="agentLastAction[hoveredAgentId]" class="text-[11px] text-slate-700 mt-2 pt-2 border-t border-gray-100">
+                    {{ agentLastAction[hoveredAgentId] }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
+
+            <!-- Zoom controls -->
+            <div class="absolute bottom-4 right-4 flex flex-col gap-1 z-20">
+              <button @click="zoomIn" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-sm flex items-center justify-center" title="Zoom in">+</button>
+              <button @click="zoomOut" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-sm flex items-center justify-center" title="Zoom out">−</button>
+              <button @click="zoomReset" class="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-sm border border-gray-200 text-slate-500 hover:text-slate-900 hover:bg-white shadow-sm transition-colors text-[10px] font-medium flex items-center justify-center" title="Reset zoom">R</button>
+            </div>
+
+            <!-- Legend & social link toggle -->
+            <div class="absolute bottom-4 left-4 z-20 flex items-end gap-1.5">
+              <button @click="showSocialLinks = !showSocialLinks; renderSocialLinks()"
+                :class="['text-[10px] bg-white/90 backdrop-blur-sm border rounded-lg px-2.5 py-1.5 transition-colors shadow-sm font-medium',
+                  showSocialLinks ? 'text-emerald-600 border-emerald-300' : 'text-slate-500 border-gray-200 hover:text-slate-700']">
+                {{ showSocialLinks ? '◉ Bonds' : '○ Bonds' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Metrics bar at bottom -->
+          <MetricsStrip :metrics="metrics" :prev-metrics="prevMetrics" :show-market="isMarketSim">
+            <template #right>
+              <div v-if="institutions.length" class="flex gap-2">
+                <span v-for="inst in institutions" :key="inst.name" class="text-[10px] text-violet-600 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-md font-medium">
+                  {{ inst.name }}
+                </span>
+              </div>
+            </template>
+          </MetricsStrip>
+        </div>
+
+        <!-- Divider -->
+        <div class="w-px bg-gray-200 shrink-0"></div>
+
+        <!-- RIGHT: Feed (no agent sidebar) -->
+        <div class="w-[440px] shrink-0 flex flex-col overflow-hidden relative bg-[#fafafa]">
+          <div class="flex-1 overflow-y-auto" ref="splitFeedRef" @scroll="onFeedScroll">
+            <div class="px-5 py-4">
+              <!-- Empty state -->
+              <div v-if="!rawEvents.length" class="flex flex-col items-center justify-center py-20 text-slate-400">
+                <div class="w-8 h-8 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+                <p class="text-sm">Waiting for the first day to begin...</p>
+              </div>
+
+              <template v-for="(group, gi) in groupedEvents" :key="gi">
+                <div class="sticky top-0 z-10 py-2">
+                  <div class="text-[11px] text-slate-500 font-semibold uppercase tracking-wider bg-[#fafafa]/95 backdrop-blur-sm py-1.5 px-2.5 rounded-lg inline-block border border-gray-100">
+                    Day {{ group.day }} · {{ group.tod }}
+                  </div>
+                </div>
+                <div class="mb-5 space-y-0.5">
+                  <template v-for="(evt, ei) in group.events" :key="ei">
+                    <div v-if="evt.type === 'life_event'" class="pl-3 py-2 border-l-2 border-dashed border-slate-300 bg-slate-50/50 rounded-r-lg">
+                      <div class="flex items-center gap-1.5 mb-0.5">
+                        <span class="text-slate-400 text-[10px]">⟡</span>
+                        <span class="text-[10px] text-slate-500 font-medium">{{ evt.agent_name }}</span>
+                        <span class="text-[10px] text-slate-400">experienced a life event</span>
+                      </div>
+                      <p class="text-[11px] text-slate-600 italic leading-relaxed pl-4">{{ evt.event_description }}</p>
+                    </div>
+                    <div v-else
+                      :class="[
+                        'py-2 px-3 rounded-lg text-[13px] leading-relaxed transition-colors',
+                        evt.highlight ? 'bg-amber-50/80 border-l-2 border-amber-400' : 'border-l-2 border-transparent hover:bg-white hover:shadow-sm'
+                      ]">
+                      <span v-html="evt.html"></span>
+                    </div>
+                  </template>
+                </div>
+              </template>
+
+              <div v-if="phase === 'complete' && rawEvents.length" class="text-center py-6 border-t border-gray-200 mt-4">
+                <p class="text-slate-500 text-sm mb-3">The simulation has ended.</p>
+                <router-link :to="`/report/${simId}`" class="btn-primary text-sm px-5 py-2.5">View Report →</router-link>
+              </div>
+            </div>
+          </div>
+
+          <!-- Scroll to bottom FAB -->
+          <Transition name="feed">
+            <button
+              v-if="userScrolledUp && rawEvents.length"
+              @click="scrollToBottom"
+              class="absolute bottom-4 right-4 z-20 w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-500 transition-colors text-sm active:scale-[0.95]"
+            >
+              ↓
+            </button>
+          </Transition>
+        </div>
+      </template>
+
       <!-- ========== FEED VIEW ========== -->
       <template v-if="viewMode === 'feed'">
         <!-- LEFT sidebar - Agent list -->
-        <div class="w-60 shrink-0 border-r border-slate-800/60 flex flex-col overflow-hidden">
+        <div class="w-64 shrink-0 border-r border-gray-100 flex flex-col overflow-hidden bg-white">
           <!-- Compact metrics -->
-          <div class="px-3 py-2 border-b border-slate-800/40">
-            <div class="grid grid-cols-5 gap-1">
+          <div class="px-3 py-2.5 border-b border-gray-100">
+            <div class="grid grid-cols-5 gap-1.5">
               <div v-for="m in SOCIAL_METRICS" :key="m.key" class="text-center">
-                <div class="text-[8px] text-slate-500 leading-none mb-0.5 flex items-center justify-center gap-0.5">
+                <div class="text-[8px] text-slate-400 leading-none mb-1 flex items-center justify-center gap-0.5 uppercase tracking-wider font-medium">
                   {{ m.label.slice(0, 5) }}
                 </div>
-                <div class="h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-1 bg-gray-100 rounded-full overflow-hidden">
                   <div :class="['h-full rounded-full transition-all duration-700', metricBarColorFn(m.key)]"
                     :style="{ width: ((metrics[m.key] ?? 0) * 100) + '%' }"></div>
                 </div>
@@ -261,64 +405,74 @@
           </div>
 
           <!-- Search -->
-          <div class="px-2 py-1.5 border-b border-slate-800/30">
+          <div class="px-3 py-2 border-b border-gray-100">
             <input
               v-model="agentSearch"
               placeholder="Search citizens..."
-              class="w-full bg-slate-900/60 border border-slate-800/40 rounded-md px-2 py-1 text-[10px] outline-none focus:border-emerald-600/50 placeholder-slate-600 transition-colors"
+              class="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-emerald-500 focus:bg-white placeholder-slate-400 transition-all"
             />
           </div>
 
           <!-- Agent list -->
-          <div class="flex-1 overflow-y-auto px-1.5 py-1">
-            <div class="text-[9px] text-slate-500 uppercase tracking-wider px-2 py-1">Citizens ({{ filteredAgents.length }})</div>
+          <div class="flex-1 overflow-y-auto px-2 py-2">
+            <div class="text-[9px] text-slate-400 uppercase tracking-wider px-2 py-1.5 font-semibold">Citizens ({{ filteredAgents.length }})</div>
             <div
               v-for="a in filteredAgents"
               :key="a.id"
               @click="selectAgent(a.id)"
               :class="[
-                'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors mb-0.5',
-                selectedAgentId === a.id ? 'bg-slate-800 border border-emerald-800/30' : 'hover:bg-slate-800/50'
+                'flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-all duration-150 mb-0.5',
+                selectedAgentId === a.id ? 'bg-emerald-50 border border-emerald-200' : 'hover:bg-gray-50 border border-transparent'
               ]"
             >
               <AgentAvatar :agent="a" :selected="selectedAgentId === a.id" size="sm" @click.stop="selectAgent(a.id)" />
               <div class="min-w-0 flex-1">
-                <div class="text-[11px] font-medium truncate">{{ a.name }}</div>
-                <div class="text-[9px] text-slate-500 truncate italic">{{ a.emotional_state || a.role }}</div>
+                <div class="text-[11px] font-medium text-slate-900 truncate">{{ a.name }}</div>
+                <div class="text-[9px] text-slate-400 truncate italic">{{ a.emotional_state || a.role }}</div>
               </div>
-              <div v-if="a.faction" class="text-[8px] text-violet-400 bg-violet-900/30 px-1 py-0.5 rounded shrink-0">{{ a.faction }}</div>
+              <div v-if="a.faction" class="text-[8px] text-violet-600 bg-violet-50 border border-violet-100 px-1.5 py-0.5 rounded-md shrink-0 font-medium">{{ a.faction }}</div>
             </div>
           </div>
         </div>
 
         <!-- CENTER: Event feed -->
-        <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="flex-1 flex flex-col overflow-hidden bg-[#fafafa]">
           <div class="flex-1 overflow-y-auto" ref="feedRef" @scroll="onFeedScroll">
-            <div class="max-w-4xl mx-auto px-6 py-4">
+            <div class="max-w-3xl mx-auto px-6 py-5">
               <!-- Empty state -->
-              <div v-if="!rawEvents.length" class="flex flex-col items-center justify-center py-20 text-slate-600">
-                <div class="w-8 h-8 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+              <div v-if="!rawEvents.length" class="flex flex-col items-center justify-center py-20 text-slate-400">
+                <div class="w-8 h-8 border-2 border-gray-300 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
                 <p class="text-sm">Waiting for the first day to begin...</p>
               </div>
 
               <template v-for="(group, gi) in groupedEvents" :key="gi">
                 <div class="sticky top-0 z-10 py-2">
-                  <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider bg-slate-950/90 backdrop-blur-sm py-1.5 px-3 rounded-md inline-block">
+                  <div class="text-[11px] text-slate-500 font-semibold uppercase tracking-wider bg-[#fafafa]/95 backdrop-blur-sm py-1.5 px-3 rounded-lg inline-block border border-gray-100">
                     Day {{ group.day }} · {{ group.tod }}
                   </div>
                 </div>
-                <div class="mb-5 space-y-0.5">
-                  <div v-for="(evt, ei) in group.events" :key="ei"
-                    :class="[
-                      'py-2.5 px-4 rounded-md text-sm leading-relaxed transition-colors',
-                      evt.highlight ? 'bg-amber-950/10 border-l-2 border-amber-600/40' : 'border-l-2 border-transparent hover:bg-slate-900/40'
-                    ]">
-                    <span v-html="evt.html"></span>
-                  </div>
+                <div class="mb-6 space-y-1">
+                  <template v-for="(evt, ei) in group.events" :key="ei">
+                    <div v-if="evt.type === 'life_event'" class="pl-3 py-2 border-l-2 border-dashed border-slate-300 bg-slate-50/50 rounded-r-lg">
+                      <div class="flex items-center gap-1.5 mb-0.5">
+                        <span class="text-slate-400 text-[10px]">⟡</span>
+                        <span class="text-[10px] text-slate-500 font-medium">{{ evt.agent_name }}</span>
+                        <span class="text-[10px] text-slate-400">experienced a life event</span>
+                      </div>
+                      <p class="text-[11px] text-slate-600 italic leading-relaxed pl-4">{{ evt.event_description }}</p>
+                    </div>
+                    <div v-else
+                      :class="[
+                        'py-2.5 px-4 rounded-lg text-[13px] leading-relaxed transition-colors',
+                        evt.highlight ? 'bg-amber-50/80 border-l-2 border-amber-400' : 'border-l-2 border-transparent hover:bg-white hover:shadow-sm'
+                      ]">
+                      <span v-html="evt.html"></span>
+                    </div>
+                  </template>
                 </div>
               </template>
 
-              <div v-if="phase === 'complete' && rawEvents.length" class="text-center py-8 border-t border-slate-800/40 mt-4">
+              <div v-if="phase === 'complete' && rawEvents.length" class="text-center py-8 border-t border-gray-200 mt-4">
                 <p class="text-slate-500 text-sm mb-3">The simulation has ended.</p>
                 <router-link :to="`/report/${simId}`" class="btn-primary text-sm px-5 py-2.5">View Full Report →</router-link>
               </div>
@@ -330,7 +484,7 @@
             <button
               v-if="userScrolledUp && rawEvents.length"
               @click="scrollToBottom"
-              class="absolute bottom-14 right-8 z-20 w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-500 transition-colors text-sm active:scale-[0.95]"
+              class="absolute bottom-14 right-8 z-20 w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-500 transition-colors text-sm active:scale-[0.95]"
             >
               ↓
             </button>
@@ -380,6 +534,7 @@ import ToastContainer from '../components/ToastContainer.vue'
 import InjectModal from '../components/InjectModal.vue'
 import ForkModal from '../components/ForkModal.vue'
 import ShortcutsOverlay from '../components/ShortcutsOverlay.vue'
+import GenerationSwarm from '../components/GenerationSwarm.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -387,7 +542,8 @@ const simId = route.params.id
 
 // ---- STATE ----
 const phase = ref('generating')
-const viewMode = ref('map')
+const isWideScreen = ref(window.innerWidth >= 1280)
+const viewMode = ref(isWideScreen.value ? 'split' : 'map')
 const statusText = ref('Connecting...')
 const worldName = ref('')
 const worldDescription = ref('')
@@ -412,6 +568,7 @@ const agentSearch = ref('')
 const chatMessages = ref([])
 const chatLoading = ref(false)
 const institutions = ref([])
+const demographics = ref(null)
 const feedRef = ref(null)
 const rawEvents = ref([])
 const toasts = ref([])
@@ -445,12 +602,20 @@ function advanceGenStep(id) {
 // D3 graph refs
 const graphContainer = ref(null)
 const graphSvg = ref(null)
+const splitGraphContainer = ref(null)
+const splitGraphSvg = ref(null)
+const splitFeedRef = ref(null)
+
+const activeGraphContainer = computed(() => viewMode.value === 'split' ? splitGraphContainer.value : graphContainer.value)
+const activeGraphSvg = computed(() => viewMode.value === 'split' ? splitGraphSvg.value : graphSvg.value)
+const activeFeedRef = computed(() => viewMode.value === 'split' ? splitFeedRef.value : feedRef.value)
 const nodePositions = reactive({})
 const graphEdges = ref([])
 let simulation = null
 let svgSelection = null
 let gSelection = null
 let linkGroup = null
+let socialLinkGroup = null
 let nodeGroup = null
 let zoomBehavior = null
 let edgeCounter = 0
@@ -522,8 +687,9 @@ function selectAgent(id) {
 // ---- D3 FORCE GRAPH ----
 function getScreenPos(agentId) {
   const pos = nodePositions[agentId]
-  if (!pos || !graphContainer.value) return null
-  const rect = graphContainer.value.getBoundingClientRect()
+  const containerEl = activeGraphContainer.value
+  if (!pos || !containerEl) return null
+  const rect = containerEl.getBoundingClientRect()
   return {
     x: rect.left + currentTransform.applyX(pos.x),
     y: rect.top + currentTransform.applyY(pos.y),
@@ -553,20 +719,26 @@ function getNodeTooltipStyle(agentId) {
 }
 
 function initGraph() {
-  if (!graphContainer.value || !graphSvg.value) return
-  const container = graphContainer.value
+  const containerEl = activeGraphContainer.value
+  const svgEl = activeGraphSvg.value
+  if (!containerEl || !svgEl) return
+  const container = containerEl
   const width = container.clientWidth
   const height = container.clientHeight
 
-  svgSelection = d3.select(graphSvg.value).attr('width', width).attr('height', height)
+  svgSelection = d3.select(svgEl).attr('width', width).attr('height', height)
   svgSelection.selectAll('*').remove()
 
   const defs = svgSelection.append('defs')
-  const pattern = defs.append('pattern').attr('id', 'dot-grid').attr('width', 24).attr('height', 24).attr('patternUnits', 'userSpaceOnUse')
-  pattern.append('circle').attr('cx', 12).attr('cy', 12).attr('r', 1).attr('fill', '#1e293b')
+  const pattern = defs.append('pattern').attr('id', 'dot-grid').attr('width', 32).attr('height', 32).attr('patternUnits', 'userSpaceOnUse')
+  pattern.append('circle').attr('cx', 16).attr('cy', 16).attr('r', 0.6).attr('fill', '#e2e8f0')
+  const dropShadow = defs.append('filter').attr('id', 'node-shadow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%')
+  dropShadow.append('feDropShadow').attr('dx', 0).attr('dy', 1).attr('stdDeviation', 3).attr('flood-color', '#000').attr('flood-opacity', 0.08)
 
+  svgSelection.append('rect').attr('width', width).attr('height', height).attr('fill', '#fff')
   svgSelection.append('rect').attr('width', width).attr('height', height).attr('fill', 'url(#dot-grid)')
   gSelection = svgSelection.append('g')
+  socialLinkGroup = gSelection.append('g').attr('class', 'social-links')
   linkGroup = gSelection.append('g').attr('class', 'edges')
   nodeGroup = gSelection.append('g').attr('class', 'nodes')
 
@@ -592,12 +764,13 @@ function initGraph() {
   simulation = d3.forceSimulation(nodes)
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force('charge', d3.forceManyBody().strength(-280))
-    .force('collide', d3.forceCollide().radius(45))
+    .force('collide', d3.forceCollide().radius(48))
     .force('x', d3.forceX(width / 2).strength(0.05))
     .force('y', d3.forceY(height / 2).strength(0.05))
     .on('tick', onSimTick)
 
   renderNodes()
+  renderSocialLinks()
 }
 
 function onSimTick() {
@@ -606,6 +779,7 @@ function onSimTick() {
     nodePositions[n.id] = { x: n.x, y: n.y }
   }
   updateNodePositions()
+  updateSocialLinkPositions()
   updateEdgePositions()
 }
 
@@ -631,16 +805,17 @@ function renderNodes() {
     .on('mouseenter', (event, d) => { hoveredAgentId.value = d.id })
     .on('mouseleave', () => { hoveredAgentId.value = null })
 
-  nodeG.append('circle').attr('class', 'select-ring').attr('r', 28).attr('fill', 'none').attr('stroke', 'transparent').attr('stroke-width', 2.5)
-  nodeG.append('circle').attr('class', 'node-circle').attr('r', 22)
+  nodeG.append('circle').attr('class', 'select-ring').attr('r', 30).attr('fill', 'none').attr('stroke', 'transparent').attr('stroke-width', 2.5)
+  nodeG.append('circle').attr('class', 'node-circle').attr('r', 24)
     .attr('fill', d => moodNodeFill(d.emotional_state))
     .attr('stroke', d => moodNodeStroke(d.emotional_state))
-    .attr('stroke-width', 2.5).attr('opacity', 0.9)
+    .attr('stroke-width', 2).attr('opacity', 0.95)
+    .attr('filter', 'url(#node-shadow)')
   nodeG.append('text').attr('class', 'node-initial').attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
-    .attr('fill', '#fff').attr('font-size', '13px').attr('font-weight', '700').attr('pointer-events', 'none')
+    .attr('fill', '#fff').attr('font-size', '14px').attr('font-weight', '700').attr('pointer-events', 'none')
     .text(d => d.name.charAt(0))
-  nodeG.append('text').attr('class', 'node-label').attr('text-anchor', 'middle').attr('y', 34)
-    .attr('fill', '#94a3b8').attr('font-size', '10px').attr('font-weight', '500').attr('pointer-events', 'none')
+  nodeG.append('text').attr('class', 'node-label').attr('text-anchor', 'middle').attr('y', 36)
+    .attr('fill', '#475569').attr('font-size', '10px').attr('font-weight', '500').attr('pointer-events', 'none')
     .text(d => d.name.split(' ')[0])
 }
 
@@ -667,8 +842,8 @@ function updateNodeAppearance() {
       .attr('fill', moodNodeFill(agent.emotional_state))
       .attr('stroke', moodNodeStroke(agent.emotional_state))
     g.select('.select-ring')
-      .attr('stroke', selectedAgentId.value === d.id ? '#fff' : 'transparent')
-      .attr('stroke-opacity', selectedAgentId.value === d.id ? 0.6 : 0)
+      .attr('stroke', selectedAgentId.value === d.id ? '#059669' : 'transparent')
+      .attr('stroke-opacity', selectedAgentId.value === d.id ? 0.4 : 0)
   })
 }
 
@@ -718,9 +893,64 @@ function updateEdgePositions() {
   linkGroup.selectAll('path.interaction-edge').attr('d', d => computeEdgePath(d))
 }
 
+const showSocialLinks = ref(true)
+
+function buildSocialLinks() {
+  const links = []
+  const seen = new Set()
+  for (const agent of Object.values(agentMap)) {
+    if (!agent.social_connections) continue
+    for (const edge of agent.social_connections) {
+      if (edge.strength < 0.15) continue
+      const key = [Math.min(agent.id, edge.target_id), Math.max(agent.id, edge.target_id)].join('-')
+      if (seen.has(key)) continue
+      seen.add(key)
+      links.push({ source: agent.id, target: edge.target_id, strength: edge.strength, sentiment: edge.sentiment })
+    }
+  }
+  return links
+}
+
+function socialLinkColor(sentiment) {
+  if (sentiment >= 0.3) return '#6ee7b7'   // emerald for positive
+  if (sentiment <= -0.3) return '#f87171'   // red for negative
+  return '#64748b'                           // slate for neutral
+}
+
+function renderSocialLinks() {
+  if (!socialLinkGroup || !showSocialLinks.value) { if (socialLinkGroup) socialLinkGroup.selectAll('*').remove(); return }
+  const links = buildSocialLinks()
+
+  const sel = socialLinkGroup.selectAll('line.social-edge').data(links, d => `${d.source}-${d.target}`)
+
+  sel.exit().transition().duration(300).attr('stroke-opacity', 0).remove()
+
+  sel.enter().append('line').attr('class', 'social-edge')
+    .attr('stroke-dasharray', '4 4')
+    .attr('stroke-linecap', 'round')
+    .attr('stroke-opacity', 0)
+    .merge(sel)
+    .attr('stroke', d => socialLinkColor(d.sentiment))
+    .attr('stroke-width', d => 0.5 + d.strength * 2)
+    .transition().duration(600)
+    .attr('stroke-opacity', d => 0.15 + d.strength * 0.35)
+
+  updateSocialLinkPositions()
+}
+
+function updateSocialLinkPositions() {
+  if (!socialLinkGroup) return
+  socialLinkGroup.selectAll('line.social-edge')
+    .attr('x1', d => nodePositions[d.source]?.x ?? 0)
+    .attr('y1', d => nodePositions[d.source]?.y ?? 0)
+    .attr('x2', d => nodePositions[d.target]?.x ?? 0)
+    .attr('y2', d => nodePositions[d.target]?.y ?? 0)
+}
+
 function addSimulationNode(agentId) {
-  if (!simulation || !graphContainer.value) return
-  const container = graphContainer.value
+  const containerEl = activeGraphContainer.value
+  if (!simulation || !containerEl) return
+  const container = containerEl
   const nodes = simulation.nodes()
   if (nodes.find(n => n.id === agentId)) return
   nodes.push({ id: agentId, x: container.clientWidth / 2 + (Math.random() - 0.5) * 200, y: container.clientHeight / 2 + (Math.random() - 0.5) * 200 })
@@ -746,7 +976,7 @@ function dismissToast(id) {
 }
 
 function addEvent(html, opts = {}) {
-  rawEvents.value.push({ day: currentDay.value, tod: currentTimeOfDay.value || 'morning', html, highlight: opts.highlight || false, location: opts.location || null })
+  rawEvents.value.push({ day: currentDay.value, tod: currentTimeOfDay.value || 'morning', html, highlight: opts.highlight || false, location: opts.location || null, type: opts.type || 'default', agent_name: opts.agent_name || null, event_description: opts.event_description || null })
   if (rawEvents.value.length > 800) rawEvents.value.splice(0, 200)
 }
 
@@ -801,7 +1031,7 @@ function processRound(actions, reactions, tensionEvent, narrative) {
   }
 
   if (narrative) {
-    enqueue(() => { addEvent(`<div class="text-slate-300 text-[12px] leading-relaxed italic border-l-2 border-slate-600/40 pl-3 my-1">${escapeHtml(narrative)}</div>`) })
+    enqueue(() => { addEvent(`<div class="text-slate-600 text-[12px] leading-relaxed italic border-l-2 border-slate-300 pl-3 my-1">${escapeHtml(narrative)}</div>`) })
   }
 
   for (const a of visibleActions) { enqueue(() => processOneAction(a)) }
@@ -809,7 +1039,7 @@ function processRound(actions, reactions, tensionEvent, narrative) {
 
   if (tensionEvent) {
     enqueue(() => {
-      addEvent(`<span class="text-amber-300 font-medium">${tensionEvent}</span>`, { highlight: true })
+      addEvent(`<span class="text-amber-600 font-medium">${tensionEvent}</span>`, { highlight: true })
       addToast(tensionEvent, 'warning')
     })
   }
@@ -823,7 +1053,7 @@ function processOneAction(a) {
   const agentIdNum = Number(a.agent_id)
 
   if (at === 'SPEAK_PUBLIC' && a.speech) {
-    addEvent(`${who}: <span class="text-slate-200">"${escapeHtml(a.speech)}"</span>`, { location: loc })
+    addEvent(`${who}: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>`, { location: loc })
     showSpeech(a.agent_id, a.speech)
     agentLastAction[a.agent_id] = `Said: "${a.speech.length > 50 ? a.speech.slice(0, 50) + '...' : a.speech}"`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
@@ -833,7 +1063,7 @@ function processOneAction(a) {
   } else if (at === 'SPEAK_PRIVATE' && a.speech) {
     const targetId = a.targets?.[0]
     const target = targetId != null ? nameSpan(agentNameById(targetId)) : 'someone'
-    addEvent(`${who} whispered to ${target}: <span class="text-slate-400 italic">"${escapeHtml(a.speech)}"</span>`, { location: loc })
+    addEvent(`${who} whispered to ${target}: <span class="text-slate-500 italic">"${escapeHtml(a.speech)}"</span>`, { location: loc })
     showSpeech(a.agent_id, a.speech)
     if (targetId != null) addGraphEdge(agentIdNum, Number(targetId), '#fbbf24')
     agentLastAction[a.agent_id] = `Whispered to ${targetId != null ? agentNameById(targetId) : 'someone'}`
@@ -847,52 +1077,81 @@ function processOneAction(a) {
     agentLastAction[a.agent_id] = `Traded with ${targetId != null ? agentNameById(targetId) : 'someone'}`
   } else if (at === 'FORM_GROUP') {
     const gName = escapeHtml(a.action_args?.name || 'a group')
-    addEvent(`${who} founded <span class="text-violet-300 font-medium">${gName}</span>`, { highlight: true, location: loc })
+    addEvent(`${who} founded <span class="text-violet-600 font-medium">${gName}</span>`, { highlight: true, location: loc })
     addToast(`${a.agent_name} founded "${a.action_args?.name || 'a group'}"`, 'institution')
     agentLastAction[a.agent_id] = `Founded ${a.action_args?.name || 'a group'}`
   } else if (at === 'PROPOSE_RULE') {
     const content = a.action_args?.content || a.speech || 'a new rule'
-    addEvent(`${who} proposed a rule: <span class="text-amber-200">"${escapeHtml(content)}"</span>`, { highlight: true, location: loc })
+    addEvent(`${who} proposed a rule: <span class="text-amber-600">"${escapeHtml(content)}"</span>`, { highlight: true, location: loc })
     agentLastAction[a.agent_id] = `Proposed: "${content.slice(0, 40)}..."`
   } else if (at === 'VOTE') {
     const vote = a.action_args?.vote === 'against' ? 'against' : 'for'
-    addEvent(`${who} voted <span class="${vote === 'for' ? 'text-emerald-300' : 'text-red-300'} font-medium">${vote}</span>`, { location: loc })
+    addEvent(`${who} voted <span class="${vote === 'for' ? 'text-emerald-600' : 'text-red-600'} font-medium">${vote}</span>`, { location: loc })
     agentLastAction[a.agent_id] = `Voted ${vote}`
   } else if (at === 'PROTEST') {
     const target = escapeHtml(a.action_args?.target || 'the current order')
-    addEvent(`${who} protested <span class="text-red-300">${target}</span>`, { highlight: true, location: loc })
+    const speechQuote = a.speech ? `: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} protested <span class="text-red-600">${target}</span>${speechQuote}`, { highlight: true, location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
     addToast(`${a.agent_name} is protesting!`, 'warning')
     agentLastAction[a.agent_id] = `Protesting: ${(a.action_args?.target || 'the current order').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'DEFECT') {
     const how = escapeHtml(a.action_args?.how || 'broke the rules')
-    addEvent(`${who} <span class="text-red-400 font-medium">defected</span> — ${how}`, { highlight: true, location: loc })
+    const speechQuote = a.speech ? ` <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} <span class="text-red-600 font-medium">defected</span> — ${how}${speechQuote}`, { highlight: true, location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
     addToast(`${a.agent_name} defected!`, 'danger')
     agentLastAction[a.agent_id] = `DEFECTED: ${(a.action_args?.how || 'broke the rules').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'BUILD') {
     const what = escapeHtml(a.action_args?.what || 'something')
-    addEvent(`${who} built <span class="text-blue-300">${what}</span>`, { location: loc })
+    addEvent(`${who} built <span class="text-blue-600">${what}</span>`, { location: loc })
     agentLastAction[a.agent_id] = `Built ${a.action_args?.what || 'something'}`
   } else if (at === 'RECOMMEND') {
     const targetId = a.action_args?.target_id || a.targets?.[0]
     const target = targetId != null ? nameSpan(agentNameById(targetId)) : 'someone'
-    addEvent(`${who} recommended to ${target}`, { location: loc })
+    const product = a.action_args?.product ? ` <span class="text-emerald-600">${escapeHtml(a.action_args.product)}</span>` : ''
+    const speechQuote = a.speech ? `: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} recommended${product} to ${target}${speechQuote}`, { location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
     if (targetId != null) addGraphEdge(agentIdNum, Number(targetId), '#6ee7b7')
     agentLastAction[a.agent_id] = `Recommended to ${targetId != null ? agentNameById(targetId) : 'someone'}`
   } else if (at === 'ABANDON') {
-    const what = escapeHtml(a.action_args?.what || 'their position')
-    addEvent(`${who} <span class="text-red-300">abandoned</span> ${what}`, { highlight: true, location: loc })
-    agentLastAction[a.agent_id] = `Abandoned: ${(a.action_args?.what || 'their position').slice(0, 40)}`
+    const what = escapeHtml(a.action_args?.what || a.action_args?.product || 'their position')
+    const reason = a.action_args?.reason ? ` — ${escapeHtml(a.action_args.reason)}` : ''
+    const speechQuote = a.speech ? `: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} <span class="text-red-600">abandoned</span> ${what}${reason}${speechQuote}`, { highlight: true, location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
+    agentLastAction[a.agent_id] = `Abandoned: ${(a.action_args?.what || a.action_args?.product || 'their position').slice(0, 40)}`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#f87171')
   } else if (at === 'COMPARE') {
-    addEvent(`<span class="text-slate-500">${escapeHtml(a.agent_name)} compared options</span>`, { location: loc })
-    agentLastAction[a.agent_id] = 'Comparing...'
+    const productA = a.action_args?.product_a || ''
+    const productB = a.action_args?.product_b || ''
+    const verdict = a.action_args?.verdict || ''
+    const comparison = productA && productB ? ` <span class="text-sky-600">${escapeHtml(productA)}</span> vs <span class="text-sky-600">${escapeHtml(productB)}</span>` : ''
+    const verdictText = verdict ? `: <span class="text-slate-600 italic">"${escapeHtml(verdict)}"</span>` : ''
+    const speechQuote = !verdict && a.speech ? `: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} compared${comparison}${verdictText}${speechQuote}`, { location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
+    agentLastAction[a.agent_id] = `Comparing ${productA || 'options'}...`
     const others = Object.keys(agentMap).map(Number).filter(id => id !== agentIdNum)
     if (others.length) addGraphEdge(agentIdNum, others[Math.floor(Math.random() * others.length)], '#94a3b8')
+  } else if (at === 'PURCHASE') {
+    const product = escapeHtml(a.action_args?.product || 'something')
+    const speechQuote = a.speech ? `: <span class="text-slate-700">"${escapeHtml(a.speech)}"</span>` : ''
+    addEvent(`${who} <span class="text-emerald-600 font-medium">purchased</span> ${product}${speechQuote}`, { location: loc })
+    if (a.speech) showSpeech(a.agent_id, a.speech)
+    agentLastAction[a.agent_id] = `Purchased ${(a.action_args?.product || 'something').slice(0, 40)}`
+  } else if (at === 'RESEARCH') {
+    const query = escapeHtml(a.action_args?.query || 'something')
+    const findings = a.action_args?.findings
+    const findingsText = findings ? ` — <span class="text-slate-500 italic">${escapeHtml(findings.slice(0, 120))}${findings.length > 120 ? '...' : ''}</span>` : ''
+    addEvent(`${who} researched <span class="text-blue-600">${query}</span>${findingsText}`, { location: loc })
+    agentLastAction[a.agent_id] = `Researched: ${(a.action_args?.query || 'something').slice(0, 40)}`
   } else if (at === 'OBSERVE') {
     addEvent(`<span class="text-slate-500">${escapeHtml(a.agent_name)} observed the scene</span>`, { location: loc })
     agentLastAction[a.agent_id] = 'Observing...'
@@ -903,14 +1162,14 @@ function processOneAction(a) {
   }
 
   if (a.world_state_changes?.rule_passed) {
-    addEvent(`<span class="text-emerald-300 font-medium">New community rule: "${escapeHtml(a.world_state_changes.rule_passed)}"</span>`, { highlight: true })
+    addEvent(`<span class="text-emerald-600 font-medium">New community rule: "${escapeHtml(a.world_state_changes.rule_passed)}"</span>`, { highlight: true })
     addToast('New rule passed!', 'info')
   }
   if (a.world_state_changes?.rule_rejected) {
-    addEvent(`<span class="text-red-300">Rule rejected: "${escapeHtml(a.world_state_changes.rule_rejected)}"</span>`)
+    addEvent(`<span class="text-red-600">Rule rejected: "${escapeHtml(a.world_state_changes.rule_rejected)}"</span>`)
   }
   if (a.world_state_changes?.institution_created) {
-    addEvent(`<span class="text-violet-300 font-medium">New institution formed: ${escapeHtml(a.world_state_changes.institution_created)}</span>`, { highlight: true })
+    addEvent(`<span class="text-violet-600 font-medium">New institution formed: ${escapeHtml(a.world_state_changes.institution_created)}</span>`, { highlight: true })
   }
 }
 
@@ -918,11 +1177,11 @@ function processOneReaction(r) {
   const loc = r.location || null
   if (r.reaction_type === 'respond' && r.content) {
     flashActor(r.agent_id)
-    addEvent(`${nameSpan(r.agent_name)}: <span class="text-sky-200">"${escapeHtml(r.content)}"</span>`, { location: loc })
+    addEvent(`${nameSpan(r.agent_name)}: <span class="text-sky-600">"${escapeHtml(r.content)}"</span>`, { location: loc })
     showSpeech(r.agent_id, r.content)
     agentLastAction[r.agent_id] = `Responded: "${r.content.slice(0, 40)}..."`
   } else if (r.reaction_type === 'whisper' && r.content) {
-    addEvent(`<span class="text-slate-400">${escapeHtml(r.agent_name)} whispered back: <span class="italic">"${escapeHtml(r.content)}"</span></span>`, { location: loc })
+    addEvent(`<span class="text-slate-500">${escapeHtml(r.agent_name)} whispered back: <span class="italic">"${escapeHtml(r.content)}"</span></span>`, { location: loc })
     agentLastAction[r.agent_id] = 'Whispered a response'
   }
 }
@@ -1002,18 +1261,20 @@ async function sendChat(question) {
 const userScrolledUp = ref(false)
 
 function onFeedScroll() {
-  if (!feedRef.value) return
-  const el = feedRef.value
+  const el = activeFeedRef.value
+  if (!el) return
   userScrolledUp.value = (el.scrollHeight - el.scrollTop - el.clientHeight) > 150
 }
 
 function scrollToBottom() {
-  if (feedRef.value) feedRef.value.scrollTop = feedRef.value.scrollHeight
+  const el = activeFeedRef.value
+  if (el) el.scrollTop = el.scrollHeight
 }
 
 watch(rawEvents, async () => {
   await nextTick()
-  if (feedRef.value && !userScrolledUp.value) feedRef.value.scrollTop = feedRef.value.scrollHeight
+  const el = activeFeedRef.value
+  if (el && !userScrolledUp.value) el.scrollTop = el.scrollHeight
 }, { deep: true })
 
 watch(selectedAgentId, () => updateNodeAppearance())
@@ -1034,17 +1295,26 @@ function handleKeydown(e) {
   else if (e.key === 'i' || e.key === 'I') { if (phase.value === 'running') showInject.value = true }
   else if (e.key === 'f' || e.key === 'F') openFork()
   else if (e.key === '?') showShortcuts.value = true
+  else if (e.key === 'Tab') {
+    e.preventDefault()
+    const modes = isWideScreen.value ? ['map', 'split', 'feed'] : ['map', 'feed']
+    const idx = modes.indexOf(viewMode.value)
+    viewMode.value = modes[(idx + 1) % modes.length]
+  }
 }
 
 // ---- RESIZE ----
 function handleResize() {
-  if ((phase.value === 'running' || phase.value === 'complete') && viewMode.value === 'map') {
+  isWideScreen.value = window.innerWidth >= 1280
+  if (!isWideScreen.value && viewMode.value === 'split') viewMode.value = 'map'
+  const simActive = phase.value === 'running' || phase.value === 'complete'
+  if (simActive && (viewMode.value === 'map' || viewMode.value === 'split')) {
     nextTick(() => initGraph())
   }
 }
 
 watch(viewMode, (v) => {
-  if (v === 'map' && (phase.value === 'running' || phase.value === 'complete')) nextTick(() => initGraph())
+  if ((v === 'map' || v === 'split') && (phase.value === 'running' || phase.value === 'complete')) nextTick(() => initGraph())
 })
 
 // ---- SSE ----
@@ -1076,7 +1346,8 @@ onMounted(() => {
 
   es.addEventListener('citizen_generated', (e) => {
     const c = JSON.parse(e.data)
-    citizens.value.push(c)
+    const existing = citizens.value.findIndex(x => x.id === c.id)
+    if (existing >= 0) { citizens.value[existing] = c } else { citizens.value.push(c) }
     agentMap[c.id] = c
     if (genSteps.value.find(s => s.id === 'citizens')?.status === 'pending') advanceGenStep('locations')
   })
@@ -1084,11 +1355,11 @@ onMounted(() => {
   es.addEventListener('round_complete', (e) => {
     const rd = JSON.parse(e.data)
 
-    if (phase.value !== 'running') {
+    const needsInit = phase.value !== 'running'
+    if (needsInit) {
       phase.value = 'running'
       advanceGenStep('citizens')
       advanceGenStep('start')
-      nextTick(() => initGraph())
     }
 
     currentDay.value = rd.day || 0
@@ -1106,14 +1377,54 @@ onMounted(() => {
           if (snap.beliefs) agentMap[snap.id].beliefs = snap.beliefs
           if (snap.working_memory) agentMap[snap.id].working_memory = snap.working_memory
           if (snap.goals) agentMap[snap.id].goals = snap.goals
+          if (snap.social_connections) agentMap[snap.id].social_connections = snap.social_connections
           if (simulation) addSimulationNode(snap.id)
         }
       }
-      updateNodeAppearance()
     }
 
     if (rd.institutions) institutions.value = rd.institutions
-    processRound(rd.actions || [], rd.reactions || [], rd.tension_event, rd.narrative)
+
+    if (needsInit) {
+      const roundActions = rd.actions || []
+      const roundReactions = rd.reactions || []
+      const roundTension = rd.tension_event
+      const roundNarrative = rd.narrative
+      const agentSnaps = rd.agents
+      nextTick(() => {
+        initGraph()
+        if (agentSnaps) {
+          for (const snap of agentSnaps) {
+            if (agentMap[snap.id]) addSimulationNode(snap.id)
+          }
+        }
+        updateNodeAppearance()
+        renderSocialLinks()
+        processRound(roundActions, roundReactions, roundTension, roundNarrative)
+      })
+    } else {
+      if (rd.agents) {
+        updateNodeAppearance()
+        renderSocialLinks()
+      }
+      processRound(rd.actions || [], rd.reactions || [], rd.tension_event, rd.narrative)
+    }
+  })
+
+  es.addEventListener('life_event', (e) => {
+    const d = JSON.parse(e.data)
+    if (d.day) currentDay.value = d.day
+    if (d.time_of_day) currentTimeOfDay.value = d.time_of_day
+    addEvent('', {
+      type: 'life_event',
+      agent_name: d.agent_name || agentNameById(d.agent_id),
+      event_description: d.event_description || '',
+    })
+  })
+
+  es.addEventListener('demographics_loaded', (e) => {
+    const d = JSON.parse(e.data)
+    console.log('Demographics loaded:', d)
   })
 
   es.addEventListener('simulation_complete', () => {
@@ -1156,8 +1467,5 @@ onUnmounted(() => {
 }
 .view-toggle {
   isolation: isolate;
-}
-.view-toggle-indicator {
-  pointer-events: none;
 }
 </style>
