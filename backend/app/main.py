@@ -20,6 +20,8 @@ from app.services.resolver import ActionResolver
 from app.services.narrator import Narrator
 from app.services.engine import SimulationEngine
 from app.services.research import ResearchService
+from app.services.gossip import GossipEngine
+from app.services.life_engine import LifeEngine
 from app.api.simulate import router as simulate_router
 from app.api.agents import router as agents_router
 from app.api.gallery import router as gallery_router
@@ -51,7 +53,9 @@ async def lifespan(app: FastAPI):
         enabled=settings.search_enabled,
         max_per_round=settings.max_searches_per_round,
     )
-    engine = SimulationEngine(llm, store, tension, resolver, narrator, research=research)
+    gossip = GossipEngine()
+    life_engine = LifeEngine(llm=llm)
+    engine = SimulationEngine(llm, store, tension, resolver, narrator, research=research, gossip=gossip, life_engine=life_engine)
 
     app.state.store = store
     app.state.llm = llm

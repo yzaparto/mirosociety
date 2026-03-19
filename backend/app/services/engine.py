@@ -16,6 +16,7 @@ from app.services.narrator import Narrator
 from app.services.research import ResearchService
 from app.services.gossip import GossipEngine
 from app.services.life_context import build_life_prompt_block, compute_action_bias
+from app.services.life_engine import LifeEngine
 from app.constants import TIMES_OF_DAY
 
 logger = logging.getLogger(__name__)
@@ -295,6 +296,7 @@ class SimulationEngine:
         narrator: Narrator,
         research: ResearchService | None = None,
         gossip: GossipEngine | None = None,
+        life_engine: LifeEngine | None = None,
     ):
         self.llm = llm
         self.store = store
@@ -303,6 +305,7 @@ class SimulationEngine:
         self.narrator = narrator
         self.research = research
         self.gossip = gossip or GossipEngine()
+        self.life_engine = life_engine
         self._running: dict[str, bool] = {}
         self._paused: dict[str, asyncio.Event] = {}
         self._speed: dict[str, SpeedMode] = {}
@@ -361,6 +364,14 @@ class SimulationEngine:
 
                 active = self._select_active_agents(world_state, agents, round_num, tension_event is not None)
 
+                life_events_this_round = []
+                if self.life_engine:
+                    life_events_this_round = await self.life_engine.evaluate(agents, world_state, round_num)
+                    for agent, event_desc in life_events_this_round:
+                        agent.working_memory.append(f"Day {world_state.day}: {event_desc}")
+                        if len(agent.working_memory) > 9:
+                            agent.working_memory = agent.working_memory[-9:]
+
                 decisions = await self._batch_decisions(active, world_state, agents)
 
                 if not await self._wait_if_paused(simulation_id):
@@ -417,6 +428,15 @@ class SimulationEngine:
                         await self.store.save_narrative(simulation_id, round_num, world_state.day, tod, narrative)
                 except Exception as narr_err:
                     logger.warning("Narrator failed for round %d: %s", round_num, narr_err)
+
+                for agent, event_desc in life_events_this_round:
+                    await emit(SSEEvent(type="life_event", data={
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "event_description": event_desc,
+                        "day": world_state.day,
+                        "time_of_day": TIMES_OF_DAY[world_state.round_in_day % 3],
+                    }))
 
                 is_market_sim = self._is_market_simulation(world_state)
                 tod = TIMES_OF_DAY[world_state.round_in_day % 3]
