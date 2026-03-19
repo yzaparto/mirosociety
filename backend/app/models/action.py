@@ -29,6 +29,8 @@ class AgentDecision(BaseModel):
     feel: str = ""
     want: str = ""
     fear: str = ""
+    life_context: str = ""
+    past_echo: str = ""
     action: ActionType = ActionType.DO_NOTHING
     args: dict = Field(default_factory=dict)
     speech: str | None = None

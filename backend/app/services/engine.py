@@ -4,7 +4,7 @@ import logging
 import random
 from typing import Callable, Awaitable, Any
 
-from app.models.agent import AgentPersona
+from app.models.agent import AgentPersona, COMMUNICATION_STYLES
 from app.models.action import ActionType, AgentDecision, ActionEntry, ReactiveResponse
 from app.models.world import WorldState, WorldMetrics
 from app.models.simulation import SimulationStatus, SpeedMode, SSEEvent
@@ -14,6 +14,8 @@ from app.services.tension import TensionEngine
 from app.services.resolver import ActionResolver
 from app.services.narrator import Narrator
 from app.services.research import ResearchService
+from app.services.gossip import GossipEngine
+from app.services.life_context import build_life_prompt_block, compute_action_bias
 from app.constants import TIMES_OF_DAY
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,9 @@ WHO YOU ARE:
 Personality: honesty={honesty:.1f}, ambition={ambition:.1f}, empathy={empathy:.1f}, confrontational={confrontational:.1f}, conformity={conformity:.1f}
 {market_personality}
 
+YOUR COMMUNICATION STYLE: {communication_style}
+
+{life_context}
 WHAT YOU KNOW TO BE TRUE (core memories):
 {core_memory}
 
@@ -41,6 +46,8 @@ WHAT JUST HAPPENED (recent days):
 {working_memory}
 {market_context}
 
+{recent_conversation}
+
 THE SITUATION RIGHT NOW:
 It is {time_of_day} on day {day}.
 {context}
@@ -50,15 +57,23 @@ AVAILABLE ACTIONS (pick exactly one):
 
 {behavior_rules}
 
+NOTE: Doing nothing is a perfectly valid choice. Not everyone acts every round. If nothing has changed since your last action and you have nothing new to say, choose OBSERVE or DO_NOTHING. The world doesn't need your opinion on everything. Silence and inaction are realistic.
+
+FORBIDDEN: NEVER start speech with "I totally agree", "I completely agree", or similar empty validation. If you agree, add something NEW.
+
 Think step by step:
 1. FEEL: What is your emotional reaction to the current situation?
-2. WANT: Given your personality and goals, what do you want right now?
-3. FEAR: What could go wrong? What worries you?
-4. DECIDE: What action do you take?
+2. LIFE: How does your current life situation (family, money, health, pressures) affect how you see this?
+3. PAST: Does anything in your history make you react differently than most people would?
+4. WANT: Given your personality and goals, what do you want right now?
+5. FEAR: What could go wrong? What worries you?
+6. DECIDE: What action do you take? (Consider: have you already said this? Is DO_NOTHING or OBSERVE more appropriate?)
 
 Respond as JSON:
 {{
   "feel": "one sentence emotional reaction",
+  "life_context": "how your life situation influences this moment, or null",
+  "past_echo": "what past experience is triggered here, or null",
   "want": "one sentence desire",
   "fear": "one sentence concern",
   "action": "ACTION_TYPE",
@@ -104,24 +119,44 @@ BEHAVIOR_RULES_SOCIAL = """IMPORTANT RULES FOR YOUR BEHAVIOR:
 - If someone makes a claim you doubt, you can INVESTIGATE them directly or RESEARCH the claim."""
 
 BEHAVIOR_RULES_MARKET = """IMPORTANT RULES FOR YOUR BEHAVIOR:
-- You are a CONSUMER, not a debater. Your actions should reflect real consumer behavior.
-- Do NOT repeat things you've already said. Check your working memory. If you've already stated your position on the topic, DO SOMETHING DIFFERENT — buy, abandon, recommend, compare, protest, or observe.
-- CRITICAL: After day 1, you MUST stop just talking and start ACTING. Real consumers don't debate endlessly — they make purchase decisions, switch brands, recommend to friends, or compare alternatives.
-- Use PURCHASE when you decide to buy or commit to the product/brand.
-- Use ABANDON when you decide to leave, cancel, or switch away. State your real reason.
-- Use RECOMMEND when you want to influence a specific person to try or avoid something.
-- Use COMPARE when you want to evaluate alternatives publicly.
-- Use PROTEST when you are genuinely unhappy and want to make noise about it.
-- Use DEFECT when you decide to actively switch to a competitor.
-- SPEAK_PUBLIC is for sharing genuine opinions, reviews, or reactions — not for abstract philosophical debate.
-- If an EVENT happens, it should change your BEHAVIOR, not just your talking points. Ask yourself: does this make me more or less likely to buy? To leave? To recommend?
-- Your brand_loyalty, price_sensitivity, social_proof, and novelty_seeking traits should guide your decisions:
-  * High brand_loyalty → you resist change, COMPLY, defend the brand
-  * High price_sensitivity → you COMPARE prices, consider ABANDON if value drops
-  * High social_proof → you follow what others are doing (if they PURCHASE, you consider it; if they ABANDON, you waver)
-  * High novelty_seeking → you're excited by change, early to PURCHASE new things
-- Before forming strong opinions, consider whether you actually KNOW the facts or are just assuming. If you're uncertain, RESEARCH to find real information or INVESTIGATE someone who might know.
-- If someone makes a claim you doubt, you can INVESTIGATE them directly or RESEARCH the claim.
+- You are a CONSUMER with opinions. Talk to people, argue, convince, warn, commiserate — and also act.
+- CRITICAL: CHECK YOUR WORKING MEMORY before choosing an action. If you already did something (compared, protested, researched), do NOT do it again. Move forward instead.
+- Mix talking and action. A natural consumer both talks about their experience AND makes decisions.
+- DECISION PROGRESSION — follow this natural path, don't get stuck:
+  1. REACT (SPEAK_PUBLIC) — share your first feelings, respond to what others said
+  2. GATHER INFO (COMPARE or RESEARCH) — do this ONCE, not repeatedly
+  3. DECIDE (PURCHASE to stay, ABANDON to leave, DEFECT to switch, COMPLY to accept)
+  4. INFLUENCE (RECOMMEND to a friend, SPEAK_PRIVATE to warn/gossip)
+  If you've already done step 2, you MUST move to step 3 or 4. No more gathering info.
+- Use SPEAK_PUBLIC to share opinions, react to others, argue, give reviews, or vent.
+- Use SPEAK_PRIVATE to confide in someone, warn a friend, or gossip.
+- Use COMPARE ONCE to evaluate alternatives. After comparing, DECIDE — don't compare again.
+- Use PURCHASE when you commit to the product/brand.
+- Use ABANDON when you leave or cancel. State your specific reason.
+- Use DEFECT when you actively switch to a competitor. Say what you're switching to.
+- Use RECOMMEND to personally influence someone. Be specific about who and why.
+- Use PROTEST when genuinely unhappy — but don't protest the same thing twice. Escalate or move on.
+- If an EVENT happens, react to it — talk about it AND let it change your behavior.
+- FORBIDDEN PHRASES: NEVER start with "I totally agree", "I completely agree", "I couldn't agree more", "I feel the same way", or any variant. If you agree, show it through ACTION or by adding something genuinely NEW.
+- If everyone around you agrees, be suspicious. Introduce nuance, ask a hard question, or play devil's advocate.
+
+ANTI-CASCADE RULE — READ CAREFULLY:
+- NOT everyone leaves. In real life, most consumers STAY even when upset. Complaining is NOT the same as leaving.
+- COMPLY is a valid and COMMON decision. Most real people grumble, adapt, and keep their subscription.
+- Only ABANDON or DEFECT if YOUR specific personality traits (price_sensitivity, brand_loyalty) strongly push you there.
+- If other people are leaving, that does NOT mean you should. Think for YOURSELF based on YOUR traits.
+- PURCHASE/COMPLY/OBSERVE are realistic outcomes for loyal or moderate consumers.
+
+YOUR TRAITS DETERMINE YOUR OUTCOME (this is binding, not a suggestion):
+  * brand_loyalty >= 0.7 → you MUST end at COMPLY or PURCHASE. Defend the brand. Find reasons to stay. Others leaving makes you SAD, not motivated to follow them.
+  * brand_loyalty 0.4-0.7 → you complain but likely stay. COMPLY is your most probable outcome unless the change personally affects your budget.
+  * price_sensitivity >= 0.7 → you progress fast, end at ABANDON or DEFECT quickly.
+  * price_sensitivity < 0.4 → price changes barely register for you. You stay.
+  * social_proof >= 0.7 → you follow the MAJORITY, not the loudest voices. If most people are still subscribed, you stay. Only follow exits after a clear tipping point (3+ people you know personally).
+  * novelty_seeking >= 0.7 → you're excited by alternatives, but consider DIFFERENT competitors — not just whatever everyone else picks.
+- Before forming strong opinions, RESEARCH to find real information or INVESTIGATE someone who might know.
+- If someone makes a claim you doubt, INVESTIGATE them or RESEARCH the claim.
+- CONTENT LOOP: Do NOT repeat the same talking point (e.g. same analogy, same complaint) across rounds. Say something new or stay silent.
 {repetition_warning}"""
 
 REACTIVE_PROMPT_SOCIAL = """You are {name}, a {role} in {world_name}.
@@ -129,6 +164,9 @@ Your mood: {mood}.
 Personality: conformity={conformity:.1f}, confrontational={confrontational:.1f}, empathy={empathy:.1f}
 {market_traits}
 {faction_info}
+{conformity_nudge}
+
+YOUR COMMUNICATION STYLE: {communication_style}
 
 YOUR BELIEFS:
 {beliefs}
@@ -138,8 +176,11 @@ YOUR RECENT EXPERIENCE:
 
 You just heard {speaker} say: "{content}"
 
-How do you react? React based on YOUR beliefs and personality, not to be polite.
+Most people stay silent — only speak if you have something genuinely different to add.
+
+How do you react? React based on YOUR beliefs, personality, and communication style — not to be polite.
 Disagreement, skepticism, sarcasm, deflection, and changing the subject are all valid.
+NEVER start with "I totally agree" or similar. If you agree, add something new — a personal story, a hard question, a specific detail.
 Only agree if you genuinely would based on your beliefs.
 
 (a) Respond publicly — say something everyone can hear
@@ -154,6 +195,9 @@ Your mood: {mood}.
 Personality: conformity={conformity:.1f}, confrontational={confrontational:.1f}, empathy={empathy:.1f}
 Consumer traits: brand_loyalty={brand_loyalty:.1f}, price_sensitivity={price_sensitivity:.1f}, social_proof={social_proof:.1f}, novelty_seeking={novelty_seeking:.1f}
 {faction_info}
+{conformity_nudge}
+
+YOUR COMMUNICATION STYLE: {communication_style}
 
 YOUR BELIEFS:
 {beliefs}
@@ -163,12 +207,15 @@ YOUR RECENT EXPERIENCE:
 
 You just heard {speaker} say: "{content}"
 
-React as a REAL CONSUMER, not a debate partner. Consider:
+Most people stay silent when they hear something — silence is the most common human reaction. Only speak if you have something genuinely different to add.
+
+React as a REAL CONSUMER with your specific communication style, not a debate partner. Consider:
 - Does this make you more or less likely to buy/stay/leave?
 - Would you tell a friend about this? Would you warn them?
 - Are you annoyed, excited, indifferent, or worried?
 
 Be specific and personal. Reference your own experience with the product/brand.
+NEVER start with "I totally agree", "I completely agree", or similar. If you agree, show it by adding a personal story, specific detail, or new angle — not by restating what was said.
 Don't give generic "balance" takes — say what you'd actually say as a customer.
 
 (a) Respond publicly — say something everyone can hear
@@ -178,6 +225,41 @@ Don't give generic "balance" takes — say what you'd actually say as a customer
 Reply with ONLY the letter and your response (1-2 sentences max).
 Examples: "a I already cancelled my order — this new logo looks like a toy brand." or "b Honestly? I'm looking at Rivian now." or "c" """
 
+
+REACTIVE_ACTION_PROMPT = """You are {name}, a {role} in {world_name}.
+Your mood: {mood}.
+Personality: conformity={conformity:.1f}, confrontational={confrontational:.1f}, empathy={empathy:.1f}
+{market_traits}
+{faction_info}
+{conformity_nudge}
+
+YOUR COMMUNICATION STYLE: {communication_style}
+
+YOUR BELIEFS:
+{beliefs}
+
+YOUR RECENT EXPERIENCE:
+{recent_memory}
+
+You just witnessed {actor} {action_description}
+
+Most people say nothing when they see someone act. Only react if this genuinely affects you.
+
+React naturally as yourself using your communication style. You might:
+- Challenge or support their decision
+- Share your own experience or plans
+- Try to persuade them to stay/go/reconsider
+- Express surprise, sympathy, or frustration
+- Ask them why
+
+Be specific and personal. Don't be generic. NEVER start with "I totally agree" or similar.
+
+(a) Respond publicly — say something everyone can hear
+(b) Whisper privately — say something only to someone near you
+(c) Stay silent — keep your thoughts to yourself
+
+Reply with ONLY the letter and your response (1-2 sentences max).
+Examples: "a Wait, you're actually leaving? I was thinking about it too but I'm not sure yet." or "b Honestly, I think they're right to go." or "c" """
 
 INVESTIGATE_PROMPT = """You are {target_name}, a {target_age}-year-old {target_role} in {world_name}.
 Your mood: {mood}.
@@ -212,6 +294,7 @@ class SimulationEngine:
         resolver: ActionResolver,
         narrator: Narrator,
         research: ResearchService | None = None,
+        gossip: GossipEngine | None = None,
     ):
         self.llm = llm
         self.store = store
@@ -219,6 +302,7 @@ class SimulationEngine:
         self.resolver = resolver
         self.narrator = narrator
         self.research = research
+        self.gossip = gossip or GossipEngine()
         self._running: dict[str, bool] = {}
         self._paused: dict[str, asyncio.Event] = {}
         self._speed: dict[str, SpeedMode] = {}
@@ -246,6 +330,7 @@ class SimulationEngine:
         self._speed[simulation_id] = SpeedMode.LIVE
         self._total_actions[simulation_id] = 0
         self._last_narrative[simulation_id] = ""
+        self.gossip.init_simulation(simulation_id)
 
         total_rounds = world_state.blueprint.time_config.total_days * world_state.blueprint.time_config.rounds_per_day
         round_num = start_round
@@ -295,9 +380,22 @@ class SimulationEngine:
                     if e.action_type in (ActionType.SPEAK_PUBLIC, ActionType.SPEAK_PRIVATE) and e.speech
                 ]
 
+                conversational_actions = [
+                    e for e in resolved_entries
+                    if e.action_type in (
+                        ActionType.PROTEST, ActionType.ABANDON, ActionType.DEFECT,
+                        ActionType.RECOMMEND, ActionType.COMPARE, ActionType.PURCHASE,
+                    ) and e not in speech_actions
+                ]
+
                 reactions: list[ReactiveResponse] = []
                 if speech_actions:
                     reactions = await self._reactive_micro_round(speech_actions, agents, world_state)
+                if conversational_actions:
+                    action_reactions = await self._reactive_micro_round_actions(
+                        conversational_actions, agents, world_state
+                    )
+                    reactions.extend(action_reactions)
 
                 if not await self._wait_if_paused(simulation_id):
                     break
@@ -321,92 +419,34 @@ class SimulationEngine:
                     logger.warning("Narrator failed for round %d: %s", round_num, narr_err)
 
                 is_market_sim = self._is_market_simulation(world_state)
-                market_action_types = {
-                    ActionType.PURCHASE, ActionType.ABANDON, ActionType.RECOMMEND,
-                    ActionType.COMPARE, ActionType.PROTEST, ActionType.DEFECT, ActionType.COMPLY,
-                }
+                tod = TIMES_OF_DAY[world_state.round_in_day % 3]
 
-                for agent in agents:
-                    tod = TIMES_OF_DAY[world_state.round_in_day % 3]
-                    summary = f"Day {world_state.day} {tod}: "
-                    my_actions = [e for e in resolved_entries if e.agent_id == agent.id]
-                    if my_actions:
-                        parts = []
-                        for e in my_actions:
-                            part = e.action_type.value
-                            if e.speech:
-                                part += f': said "{e.speech[:80]}"'
-                            if e.action_type == ActionType.PURCHASE:
-                                part += f': bought {e.action_args.get("product", "the product")}'
-                            elif e.action_type == ActionType.ABANDON:
-                                part += f': left {e.action_args.get("product", "the product")} — {e.action_args.get("reason", "")[:60]}'
-                            elif e.action_type == ActionType.RECOMMEND:
-                                part += f': recommended {e.action_args.get("product", "the product")}'
-                            elif e.action_type == ActionType.COMPARE:
-                                part += f': compared {e.action_args.get("product_a", "")} vs {e.action_args.get("product_b", "")}'
-                            elif e.action_type == ActionType.RESEARCH:
-                                findings = e.action_args.get("findings", "")
-                                part += f': searched \'{e.action_args.get("query", "")}\''
-                                if findings:
-                                    part += f' — {findings[:120]}'
-                            elif e.action_type == ActionType.INVESTIGATE:
-                                response = e.action_args.get("response", "")
-                                target_names = [a.name for a in agents if a.id in e.targets]
-                                target_name = target_names[0] if target_names else "someone"
-                                part += f': asked {target_name} \'{e.action_args.get("question", "")[:50]}\''
-                                if response:
-                                    part += f' — they said: \'{response[:80]}\''
-                            if e.targets:
-                                target_names = [a.name for a in agents if a.id in e.targets]
-                                if target_names:
-                                    part += f" (to {', '.join(target_names)})"
-                            parts.append(part)
-                        summary += "; ".join(parts)
-                    else:
-                        notable = [e for e in resolved_entries if e.agent_id != agent.id]
-                        if notable:
-                            heard = []
-                            for e in notable[:6]:
-                                if is_market_sim and e.action_type in market_action_types:
-                                    if e.action_type == ActionType.PURCHASE:
-                                        heard.append(f"{e.agent_name} BOUGHT {e.action_args.get('product', 'the product')}")
-                                    elif e.action_type == ActionType.ABANDON:
-                                        heard.append(f"{e.agent_name} LEFT {e.action_args.get('product', 'the product')}")
-                                    elif e.action_type == ActionType.RECOMMEND:
-                                        heard.append(f"{e.agent_name} RECOMMENDED {e.action_args.get('product', 'the product')}")
-                                    elif e.action_type == ActionType.COMPARE:
-                                        heard.append(f"{e.agent_name} COMPARED {e.action_args.get('product_a', '')} vs {e.action_args.get('product_b', '')}")
-                                    elif e.action_type == ActionType.PROTEST:
-                                        heard.append(f"{e.agent_name} PROTESTED: {e.action_args.get('target', '')[:60]}")
-                                    elif e.action_type == ActionType.DEFECT:
-                                        heard.append(f"{e.agent_name} SWITCHED to a competitor")
-                                    else:
-                                        heard.append(f"{e.agent_name} did {e.action_type.value}")
-                                elif e.action_type == ActionType.RESEARCH:
-                                    heard.append(f"{e.agent_name} was looking something up online: '{e.action_args.get('query', '')[:50]}'")
-                                elif e.action_type == ActionType.INVESTIGATE:
-                                    target_names = [a.name for a in agents if a.id in e.targets]
-                                    target_name = target_names[0] if target_names else "someone"
-                                    heard.append(f"{e.agent_name} went to question {target_name} directly")
-                                elif e.speech:
-                                    heard.append(f'{e.agent_name} said: "{e.speech[:120]}"')
-                                elif e.action_type in (ActionType.PROTEST, ActionType.DEFECT, ActionType.FORM_GROUP, ActionType.ABANDON, ActionType.PURCHASE):
-                                    heard.append(f"{e.agent_name} did {e.action_type.value}")
-                            if reactions:
-                                for r in reactions[:4]:
-                                    if r.content and r.reaction_type != "silent":
-                                        heard.append(f'{r.agent_name} reacted: "{r.content[:100]}"')
-                            summary += "Heard nearby: " + "; ".join(heard) if heard else "A quiet period."
-                        else:
-                            summary += "A quiet period."
-
-                    agent.working_memory.append(summary)
-                    if len(agent.working_memory) > 9:
-                        agent.working_memory = agent.working_memory[-9:]
+                self.gossip.propagate(
+                    sim_id=simulation_id,
+                    resolved_entries=resolved_entries,
+                    reactions=reactions,
+                    agents=agents,
+                    round_num=round_num,
+                    day=world_state.day,
+                    time_of_day=tod,
+                    is_market=is_market_sim,
+                )
 
                 if tension_event:
-                    for agent in agents:
-                        agent.working_memory.append(f"Day {world_state.day}: EVENT — {tension_event[:100]}")
+                    event_recipients = self.tension.get_event_recipients()
+                    self.gossip.inject_event_via_gossip(
+                        sim_id=simulation_id,
+                        event_desc=tension_event,
+                        agents=agents,
+                        round_num=round_num,
+                        day=world_state.day,
+                        initial_recipients=event_recipients,
+                    )
+
+                gossip_metrics = self.gossip.compute_gossip_metrics(simulation_id, agents, round_num)
+                world_state.metrics.information_spread = gossip_metrics["information_spread"]
+                world_state.metrics.echo_chamber_index = gossip_metrics["echo_chamber_index"]
+                world_state.metrics.rumor_distortion = gossip_metrics["rumor_distortion"]
 
                 if world_state.day % 30 == 0 and world_state.round_in_day == 0:
                     await self._reflective_memory_pass(simulation_id, agents, world_state)
@@ -438,7 +478,13 @@ class SimulationEngine:
                              "core_memory": a.core_memory,
                              "beliefs": a.beliefs,
                              "working_memory": a.working_memory,
-                             "goals": a.goals}
+                             "goals": a.goals,
+                             "communication_style": getattr(a, "communication_style", "emotional"),
+                             "knowledge_level": getattr(a, "knowledge_level", "full"),
+                             "social_connections": [
+                                 {"target_id": e.target_id, "strength": round(e.strength, 2), "sentiment": round(e.sentiment, 2)}
+                                 for e in a.social_connections
+                             ]}
                             for a in agents
                         ],
                         "institutions": [i.model_dump() for i in world_state.institutions],
@@ -482,6 +528,7 @@ class SimulationEngine:
             self._total_actions.pop(simulation_id, None)
             self._last_narrative.pop(simulation_id, None)
             self.tension.cleanup(simulation_id)
+            self.gossip.cleanup(simulation_id)
 
     def _select_active_agents(
         self,
@@ -494,6 +541,8 @@ class SimulationEngine:
         base_min = tc.active_agents_per_round_min
         base_max = tc.active_agents_per_round_max
         base_count = random.randint(base_min, base_max)
+
+        bridge_node_ids = set(TensionEngine.find_bridge_nodes(agents))
 
         weights: dict[int, float] = {}
         has_open_proposals = any(p.status == "open" for p in world_state.proposals)
@@ -509,6 +558,9 @@ class SimulationEngine:
                 w += 0.2
             if event_occurred:
                 w += 0.4
+
+            if a.id in bridge_node_ids:
+                w += 0.15
 
             if is_market:
                 if a.personality.brand_loyalty > 0.7:
@@ -568,6 +620,8 @@ class SimulationEngine:
                 feel=data.get("feel", ""),
                 want=data.get("want", ""),
                 fear=data.get("fear", ""),
+                life_context=data.get("life_context") or "",
+                past_echo=data.get("past_echo") or "",
                 action=action,
                 args=data.get("args", {}),
                 speech=data.get("speech"),
@@ -595,44 +649,255 @@ class SimulationEngine:
 
     @staticmethod
     def _detect_repetition(agent: AgentPersona) -> str:
-        speech_memories = [
-            m for m in agent.working_memory
-            if "said" in m.lower() or "speak_public" in m.lower()
+        warnings = []
+        mem_lower = [m.lower() for m in agent.working_memory]
+
+        compare_count = sum(1 for m in mem_lower if "compared" in m or "compare" in m)
+        if compare_count >= 3:
+            warnings.append(
+                "\n🛑 You have compared options {n} times already. STOP COMPARING. "
+                "You have enough information to DECIDE. You MUST now pick one: "
+                "PURCHASE (commit to the product), ABANDON (leave it), DEFECT (switch to competitor), "
+                "or SPEAK_PUBLIC (tell people your decision). No more comparing."
+                .format(n=compare_count)
+            )
+        elif compare_count >= 2:
+            warnings.append(
+                "\n⚠️ You've already compared these options. Time to make a decision. "
+                "Will you stay (PURCHASE/COMPLY), leave (ABANDON), switch (DEFECT), "
+                "or tell someone what you decided (SPEAK_PUBLIC/RECOMMEND)?"
+            )
+
+        research_count = sum(1 for m in mem_lower if "research" in m)
+        if research_count >= 2:
+            warnings.append(
+                "\n⚠️ You've done enough research. Use what you've learned to ACT — "
+                "decide, switch, stay, or share your findings with someone."
+            )
+
+        protest_count = sum(1 for m in mem_lower if "protest" in m)
+        if protest_count >= 2:
+            warnings.append(
+                "\n⚠️ You've already protested. Protesting again won't change things. "
+                "Either escalate (DEFECT/ABANDON) or try something different (RECOMMEND an alternative, SPEAK_PRIVATE to organize)."
+            )
+
+        speech_count = sum(1 for m in mem_lower if "said" in m or "speak_public" in m)
+        decisive_count = sum(1 for m in mem_lower if any(
+            act in m for act in ("purchase", "abandon", "defect")
+        ))
+
+        if speech_count >= 4 and decisive_count == 0 and compare_count < 2:
+            warnings.append(
+                "\n💡 You've been talking a lot. Consider taking a concrete action — "
+                "buy, leave, recommend, or protest. Actions speak louder than words."
+            )
+
+        content_warning = SimulationEngine._detect_content_repetition(mem_lower)
+        if content_warning:
+            warnings.append(content_warning)
+
+        return warnings[0] if warnings else ""
+
+    @staticmethod
+    def _detect_content_repetition(mem_lower: list[str]) -> str:
+        """Detect semantic content loops — agents repeating the same talking point
+        across multiple rounds (e.g. Blockbuster analogy, family movie night, etc.)."""
+        speech_memories = [m for m in mem_lower if "said" in m]
+        if len(speech_memories) < 3:
+            return ""
+
+        phrase_counts: dict[str, int] = {}
+        key_phrases = [
+            "blockbuster", "family movie night", "loyal customer", "jumping ship",
+            "squeeze every penny", "corporate greed", "password sharing",
+            "price hike", "price increase", "ridiculous rules", "silly rules",
+            "flexible sharing", "quality content", "premium content",
         ]
-        if len(speech_memories) >= 3:
+        for mem in speech_memories:
+            for phrase in key_phrases:
+                if phrase in mem:
+                    phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+
+        repeated = [(p, c) for p, c in phrase_counts.items() if c >= 3]
+        if repeated:
+            top_phrase, count = max(repeated, key=lambda x: x[1])
             return (
-                "\n⚠️ WARNING: You have spoken publicly multiple times already. "
-                "You MUST take a NON-SPEECH action this turn. Choose from: "
-                "PURCHASE, ABANDON, RECOMMEND, COMPARE, PROTEST, DEFECT, COMPLY, or OBSERVE. "
-                "No more talking — ACT on your beliefs."
+                f"\n🔁 CONTENT LOOP DETECTED: You've mentioned '{top_phrase}' {count} times. "
+                "STOP repeating yourself. Say something genuinely NEW, take a concrete action, "
+                "or stay silent. Repeating the same point makes you boring and unrealistic."
             )
-        if len(speech_memories) >= 2:
-            return (
-                "\n⚠️ You've already shared your opinion. Consider taking concrete action instead of speaking again. "
-                "What would you actually DO as a consumer — buy, leave, recommend, compare, or protest?"
-            )
+
+        word_bags: list[set[str]] = []
+        for mem in speech_memories[-4:]:
+            words = set(w for w in mem.split() if len(w) > 4)
+            word_bags.append(words)
+
+        if len(word_bags) >= 3:
+            overlaps = []
+            for i in range(len(word_bags)):
+                for j in range(i + 1, len(word_bags)):
+                    if word_bags[i] and word_bags[j]:
+                        overlap = len(word_bags[i] & word_bags[j]) / min(len(word_bags[i]), len(word_bags[j]))
+                        overlaps.append(overlap)
+            if overlaps and sum(overlaps) / len(overlaps) > 0.5:
+                return (
+                    "\n🔁 You keep saying very similar things. Change the topic, take an action, "
+                    "or choose DO_NOTHING. Real people don't repeat themselves this much."
+                )
+
         return ""
 
     @staticmethod
     def _build_position_tracker(agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
-        positions = []
+        """Show a BALANCED view of what others are doing — include stayers, not just leavers.
+        Without balance, the tracker becomes a cascade amplifier that makes every remaining
+        agent think "everyone is leaving" and follow suit."""
+        left_names: list[str] = []
+        stayed_names: list[str] = []
+        talking_names: list[str] = []
+
+        exit_keywords = ("abandon", "defect", "switched", "left", "jumping ship", "cancelled")
+        stay_keywords = ("purchase", "comply", "recommend", "still worth", "staying")
+
         for other in all_agents:
             if other.id == agent.id:
                 continue
-            recent_speech = [
-                m for m in other.working_memory
-                if "said" in m.lower()
-            ]
-            recent_actions = [
-                m for m in other.working_memory
-                if any(act in m.lower() for act in ("purchase", "abandon", "recommend", "protest", "defect"))
-            ]
-            if recent_actions:
-                positions.append(f"- {other.name} ({other.emotional_state}): {recent_actions[-1]}")
-            elif recent_speech:
-                positions.append(f"- {other.name} ({other.emotional_state}): still just talking")
-        if positions:
-            return "\nWHAT OTHERS ARE DOING (not just saying):\n" + "\n".join(positions[:5])
+            mem_lower = [m.lower() for m in other.working_memory]
+            has_left = any(kw in m for m in mem_lower for kw in exit_keywords)
+            has_stayed = any(kw in m for m in mem_lower for kw in stay_keywords)
+            has_spoken = any("said" in m for m in mem_lower)
+
+            if has_left:
+                left_names.append(other.name)
+            elif has_stayed:
+                stayed_names.append(other.name)
+            elif has_spoken:
+                talking_names.append(other.name)
+
+        total_others = len(all_agents) - 1
+        if total_others <= 0:
+            return ""
+
+        parts = ["\nWHAT OTHERS ARE ACTUALLY DOING:"]
+        if left_names:
+            parts.append(f"- LEFT ({len(left_names)}/{total_others}): {', '.join(left_names[:4])}")
+        if stayed_names:
+            parts.append(f"- STAYED ({len(stayed_names)}/{total_others}): {', '.join(stayed_names[:4])}")
+
+        undecided = total_others - len(left_names) - len(stayed_names)
+        if undecided > 0:
+            parts.append(f"- UNDECIDED ({undecided}/{total_others}): still talking or watching")
+
+        if len(parts) <= 1:
+            return ""
+        return "\n".join(parts)
+
+    @staticmethod
+    def _loyalty_anchor(agent: AgentPersona) -> str:
+        """Generate a personality-anchored constraint that resists uniform cascade behavior.
+        High brand_loyalty agents get strong stay-pressure; high price_sensitivity agents
+        get permission to leave quickly. Without this, the LLM treats all agents the same."""
+        p = agent.personality
+        parts = []
+
+        if p.brand_loyalty >= 0.7:
+            parts.append(
+                "⚓ LOYALTY ANCHOR: You are deeply loyal to this brand. Switching feels like "
+                "betraying something you believe in. You need OVERWHELMING, PERSONAL evidence "
+                "to leave — other people complaining is NOT enough. You defend the brand, find "
+                "silver linings, and end at COMPLY or PURCHASE. You do NOT follow the crowd."
+            )
+        elif p.brand_loyalty >= 0.5:
+            parts.append(
+                "⚓ LOYALTY: You have moderate brand attachment. You'll grumble but stay unless "
+                "the change directly harms YOUR situation. Don't leave just because others are leaving."
+            )
+
+        if p.price_sensitivity >= 0.7:
+            parts.append(
+                "💰 PRICE PRESSURE: Price increases hit you hard. You move quickly to COMPARE "
+                "and then ABANDON or DEFECT. You don't need to wait for others."
+            )
+
+        if p.social_proof >= 0.7:
+            defect_count = sum(
+                1 for m in agent.working_memory
+                if any(w in m.lower() for w in ("abandon", "defect", "switched", "left", "jumping ship"))
+            )
+            if defect_count >= 3:
+                parts.append(
+                    "👥 SOCIAL TIPPING POINT: Multiple people you know have already left. "
+                    "As someone who follows the crowd, this is now YOUR moment to decide."
+                )
+            elif defect_count >= 1:
+                parts.append(
+                    "👥 SOCIAL SIGNAL: A few people have left, but most haven't. "
+                    "You follow the majority — and the majority is still here. Wait and see."
+                )
+            else:
+                parts.append(
+                    "👥 SOCIAL PROOF: Nobody around you has actually left yet. "
+                    "People complain, but complaining isn't leaving. You wait for real action."
+                )
+
+        if p.novelty_seeking >= 0.7:
+            parts.append(
+                "🔍 NOVELTY: You're excited by alternatives. You want to try the new thing, "
+                "but consider DIFFERENT competitors — not just whatever everyone else picks."
+            )
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _decision_stage_nudge(agent: AgentPersona) -> str:
+        mem_lower = [m.lower() for m in agent.working_memory]
+        has_compared = any("compared" in m or "compare" in m for m in mem_lower)
+        has_researched = any("research" in m for m in mem_lower)
+        has_protested = any("protest" in m for m in mem_lower)
+        has_decided = any(
+            act in m for m in mem_lower
+            for act in ("purchase", "abandon", "defect", "switched", "cancelled", "left")
+        )
+        has_spoken = any("said" in m for m in mem_lower)
+
+        p = agent.personality
+        is_loyal = p.brand_loyalty >= 0.6
+
+        if has_decided:
+            return (
+                "\nYOUR DECISION STAGE: You've already made a decision. "
+                "Now influence others — RECOMMEND to a friend, share your experience (SPEAK_PUBLIC), "
+                "or observe how others react."
+            )
+        if has_compared or has_researched:
+            if is_loyal:
+                return (
+                    "\nYOUR DECISION STAGE: You've gathered info. Given your brand loyalty, "
+                    "consider whether the brand still delivers value for YOU specifically. "
+                    "Decide: PURCHASE (recommit), COMPLY (accept changes), or if truly untenable, ABANDON."
+                )
+            return (
+                "\nYOUR DECISION STAGE: You've gathered enough information. "
+                "It's time to DECIDE: PURCHASE (stay), ABANDON (leave), DEFECT (switch to competitor), "
+                "or COMPLY (accept the changes). Stop researching and comparing — commit to a choice."
+            )
+        if has_protested:
+            if is_loyal:
+                return (
+                    "\nYOUR DECISION STAGE: You've voiced your displeasure. "
+                    "But you're loyal — consider whether this is truly a dealbreaker or just frustration. "
+                    "You could COMPLY (grudgingly accept) or RESEARCH to see if the value is still there."
+                )
+            return (
+                "\nYOUR DECISION STAGE: You've voiced your displeasure. "
+                "Now either escalate (ABANDON/DEFECT) or reconsider (COMPARE alternatives, RESEARCH facts)."
+            )
+        if has_spoken:
+            return (
+                "\nYOUR DECISION STAGE: You've shared your initial reaction. "
+                "Now gather info (COMPARE or RESEARCH once) or go straight to a decision if you've heard enough."
+            )
         return ""
 
     def _build_decision_prompt(
@@ -642,7 +907,9 @@ class SimulationEngine:
         all_agents: list[AgentPersona],
     ) -> tuple[str, str]:
         others = [a for a in all_agents if a.id != agent.id]
-        nearby = random.sample(others, min(8, len(others)))
+        nearby = self.gossip.social_neighbors(agent, all_agents, count=5)
+        if not nearby:
+            nearby = random.sample(others, min(5, len(others)))
         nearby_text = ", ".join(
             f"{a.name} ({a.role}, {a.emotional_state}" + (f", {a.faction}" if a.faction else "") + ")"
             for a in nearby[:5]
@@ -692,7 +959,28 @@ class SimulationEngine:
         if not self.research or not self.research.enabled:
             available = [a for a in available if a != ActionType.RESEARCH]
 
-        actions_text = "\n".join(f"- {a.value}" for a in available)
+        if is_market:
+            mem_lower = [m.lower() for m in agent.working_memory]
+            already_compared = sum(1 for m in mem_lower if "compared" in m or "compare" in m) >= 2
+            already_researched = sum(1 for m in mem_lower if "research" in m) >= 2
+            already_protested = sum(1 for m in mem_lower if "protest" in m) >= 2
+            if already_compared:
+                available = [a for a in available if a != ActionType.COMPARE]
+            if already_researched:
+                available = [a for a in available if a != ActionType.RESEARCH]
+            if already_protested:
+                available = [a for a in available if a != ActionType.PROTEST]
+
+        action_bias: dict[str, str] = {}
+        if agent.life_state is not None:
+            action_bias = compute_action_bias(agent, world_state.day)
+
+        if action_bias:
+            actions_text = "\n".join(
+                f"- {a.value} {action_bias.get(a.value, '')}" for a in available
+            )
+        else:
+            actions_text = "\n".join(f"- {a.value}" for a in available)
 
         rel_text = "\n".join(
             f"- Agent {aid}: {desc}" for aid, desc in list(agent.relationships.items())[:5]
@@ -722,6 +1010,12 @@ class SimulationEngine:
             position_tracker = self._build_position_tracker(agent, all_agents)
             if position_tracker:
                 market_context += position_tracker
+            loyalty_anchor = self._loyalty_anchor(agent)
+            if loyalty_anchor:
+                market_context += "\n" + loyalty_anchor
+            stage_nudge = self._decision_stage_nudge(agent)
+            if stage_nudge:
+                market_context += stage_nudge
 
         if is_market:
             repetition_warning = self._detect_repetition(agent)
@@ -729,12 +1023,26 @@ class SimulationEngine:
         else:
             behavior_rules = BEHAVIOR_RULES_SOCIAL
 
+        rules_text = self._build_rules_for_agent(agent, world_state)
+
+        style_key = getattr(agent, "communication_style", "emotional")
+        style_desc = COMMUNICATION_STYLES.get(style_key, COMMUNICATION_STYLES["emotional"])
+        comm_style_text = f"{style_key} — {style_desc}"
+
+        recent_conversation = self._build_recent_conversation(agent, all_agents)
+
+        context_str = "\n".join(context_parts)
+        if agent.life_state is not None:
+            life_context_block = build_life_prompt_block(agent, world_state.day, context_str)
+        else:
+            life_context_block = ""
+
         system = AGENT_DECISION_SYSTEM.format(
             name=agent.name,
             age=agent.age,
             role=agent.role,
             world_name=world_state.blueprint.name,
-            rules="\n".join(f"- {r}" for r in world_state.blueprint.rules),
+            rules=rules_text,
             background=agent.background,
             honesty=agent.personality.honesty,
             ambition=agent.personality.ambition,
@@ -742,19 +1050,88 @@ class SimulationEngine:
             confrontational=agent.personality.confrontational,
             conformity=agent.personality.conformity,
             market_personality=market_personality,
+            communication_style=comm_style_text,
+            life_context=life_context_block,
             core_memory="\n".join(f"- {m}" for m in agent.core_memory) or "Nothing significant yet.",
             beliefs="\n".join(f"- {b}" for b in agent.beliefs) or "Still forming opinions.",
             relationships=rel_text,
             working_memory="\n".join(f"- {m}" for m in agent.working_memory[-6:]) or "Just arrived.",
             market_context=market_context,
+            recent_conversation=recent_conversation,
             time_of_day=TIMES_OF_DAY[world_state.round_in_day % 3],
             day=world_state.day,
-            context="\n".join(context_parts),
+            context=context_str,
             actions=actions_text,
             behavior_rules=behavior_rules,
         )
 
         return (system, "What do you do?")
+
+    @staticmethod
+    def _build_rules_for_agent(agent: AgentPersona, world_state: WorldState) -> str:
+        """Filter world rules based on agent's knowledge_level for information diffusion."""
+        knowledge = getattr(agent, "knowledge_level", "full")
+        all_rules = world_state.blueprint.rules
+
+        if knowledge == "full":
+            return "\n".join(f"- {r}" for r in all_rules)
+
+        filtered = []
+        change_keywords = ("price", "hike", "increase", "ads", "ad-supported", "password", "sharing", "crack")
+        for rule in all_rules:
+            rule_lower = rule.lower()
+            mentions_change = any(kw in rule_lower for kw in change_keywords)
+            if not mentions_change:
+                filtered.append(f"- {rule}")
+            elif knowledge == "partial":
+                filtered.append(f"- (Rumor) You've heard something about changes to pricing or policies, but you're not sure of the details.")
+        if knowledge == "unaware":
+            filtered.append("- You haven't heard about any recent changes. Everything seems normal to you.")
+        return "\n".join(filtered) if filtered else "\n".join(f"- {r}" for r in all_rules)
+
+    @staticmethod
+    def _build_recent_conversation(agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
+        """Collect recent public speeches from other agents' working memory to create
+        conversation threading — agents respond to specific things people said."""
+        recent_speeches: list[str] = []
+        for other in all_agents:
+            if other.id == agent.id:
+                continue
+            for mem in other.working_memory[-3:]:
+                if 'said "' in mem.lower() or "speak_public" in mem.lower():
+                    parts = mem.split('said "')
+                    if len(parts) >= 2:
+                        quote = parts[-1].rstrip('"').rstrip("'")
+                        recent_speeches.append(f"- {other.name}: \"{quote[:100]}\"")
+        if not recent_speeches:
+            return ""
+        shown = recent_speeches[-5:]
+        return (
+            "RECENT CONVERSATION (what people just said):\n"
+            + "\n".join(shown)
+            + "\n\nYou can respond to any of these directly, change the subject, or ignore them. "
+            "If you respond, reference the person BY NAME."
+        )
+
+    @staticmethod
+    def _conformity_nudge(agent: AgentPersona) -> str:
+        if agent.personality.conformity < 0.4:
+            return "You are naturally skeptical. Find the flaw in what was said, even if you partly agree."
+        if agent.personality.confrontational > 0.7:
+            return "You enjoy challenging people. Push back, even if they have a point."
+        return ""
+
+    @staticmethod
+    def _should_stay_silent(witness: AgentPersona, is_agreement_pile_on: bool) -> bool:
+        """Pre-filter: most people stay silent most of the time. Returns True to skip LLM call."""
+        silence_prob = 0.35 + (0.25 * (1.0 - witness.personality.confrontational))
+        if witness.personality.ambition < 0.3:
+            silence_prob += 0.15
+        if is_agreement_pile_on and witness.personality.conformity > 0.5:
+            silence_prob += 0.2
+        if witness.emotional_state in ("calm", "content", "satisfied"):
+            silence_prob += 0.1
+        return random.random() < min(0.85, silence_prob)
 
     async def _reactive_micro_round(
         self,
@@ -767,24 +1144,44 @@ class SimulationEngine:
 
         for speech in speech_actions[:5]:
             if speech.action_type == ActionType.SPEAK_PUBLIC:
-                witnesses = [
-                    a for a in agents
-                    if a.id != speech.agent_id
-                ]
+                speaker = agent_map.get(speech.agent_id)
+                if speaker:
+                    witnesses = self.gossip.social_neighbors(speaker, agents, count=4)
+                else:
+                    witnesses = [a for a in agents if a.id != speech.agent_id][:4]
             else:
                 witnesses = [agent_map[t] for t in speech.targets if t in agent_map]
 
-            witnesses = witnesses[:6]
+            witnesses = witnesses[:4]
             if not witnesses:
                 continue
 
             is_market = self._is_market_simulation(world_state)
 
+            agreement_count = sum(
+                1 for r in reactions
+                if r.reaction_type == "respond" and r.content
+                and any(kw in (r.content or "").lower() for kw in ("agree", "same", "right", "exactly", "yes"))
+            )
+            is_pile_on = agreement_count >= 2
+
             prompts = []
+            prompt_witnesses = []
             for w in witnesses:
+                if self._should_stay_silent(w, is_pile_on):
+                    reactions.append(ReactiveResponse(
+                        agent_id=w.id, agent_name=w.name,
+                        reaction_type="silent", location=w.location,
+                    ))
+                    continue
+
                 faction_info = f"You belong to {w.faction}." if w.faction else "You don't belong to any faction."
                 beliefs = "\n".join(f"- {b}" for b in w.beliefs[:5]) or "Still forming opinions."
                 recent_memory = "\n".join(w.working_memory[-3:]) or "Just arrived."
+                nudge = self._conformity_nudge(w)
+                style_key = getattr(w, "communication_style", "emotional")
+                style_desc = COMMUNICATION_STYLES.get(style_key, COMMUNICATION_STYLES["emotional"])
+                comm_style = f"{style_key} — {style_desc}"
 
                 if is_market:
                     prompt = (
@@ -801,6 +1198,8 @@ class SimulationEngine:
                             social_proof=w.personality.social_proof,
                             novelty_seeking=w.personality.novelty_seeking,
                             faction_info=faction_info,
+                            conformity_nudge=nudge,
+                            communication_style=comm_style,
                             beliefs=beliefs,
                             recent_memory=recent_memory,
                             speaker=speech.agent_name,
@@ -821,6 +1220,8 @@ class SimulationEngine:
                             empathy=w.personality.empathy,
                             market_traits=market_traits,
                             faction_info=faction_info,
+                            conformity_nudge=nudge,
+                            communication_style=comm_style,
                             beliefs=beliefs,
                             recent_memory=recent_memory,
                             speaker=speech.agent_name,
@@ -829,6 +1230,10 @@ class SimulationEngine:
                         ""
                     )
                 prompts.append(prompt)
+                prompt_witnesses.append(w)
+
+            if not prompts:
+                continue
 
             responses = await self.llm.generate_batch(
                 [(p[0], p[1] or "React.") for p in prompts],
@@ -836,7 +1241,151 @@ class SimulationEngine:
                 max_tokens=150,
             )
 
-            for w, resp in zip(witnesses, responses):
+            for w, resp in zip(prompt_witnesses, responses):
+                resp = resp.strip()
+                if not resp:
+                    continue
+
+                letter = resp[0].lower()
+                content = resp[1:].strip().lstrip(")].,:- ")
+
+                if letter == "a":
+                    reactions.append(ReactiveResponse(
+                        agent_id=w.id, agent_name=w.name,
+                        reaction_type="respond", content=content or None,
+                        location=w.location,
+                    ))
+                elif letter == "b":
+                    reactions.append(ReactiveResponse(
+                        agent_id=w.id, agent_name=w.name,
+                        reaction_type="whisper", content=content or None,
+                        location=w.location,
+                    ))
+                else:
+                    reactions.append(ReactiveResponse(
+                        agent_id=w.id, agent_name=w.name,
+                        reaction_type="silent",
+                        location=w.location,
+                    ))
+
+        return reactions
+
+    @staticmethod
+    def _describe_action_for_reaction(entry: ActionEntry) -> str:
+        at = entry.action_type
+        args = entry.action_args or {}
+        if at == ActionType.PROTEST:
+            target = args.get("target", "the current situation")
+            speech = f', saying: "{entry.speech}"' if entry.speech else ""
+            return f"protest against {target}{speech}"
+        elif at == ActionType.ABANDON:
+            product = args.get("product", "their position")
+            reason = args.get("reason", "")
+            speech = f', saying: "{entry.speech}"' if entry.speech else ""
+            reason_text = f" because {reason}" if reason else ""
+            return f"abandon {product}{reason_text}{speech}"
+        elif at == ActionType.DEFECT:
+            how = args.get("how", "break the rules")
+            speech = f', saying: "{entry.speech}"' if entry.speech else ""
+            return f"defect — {how}{speech}"
+        elif at == ActionType.RECOMMEND:
+            product = args.get("product", "something")
+            reason = args.get("reason", "")
+            return f'recommend {product}{f" because {reason}" if reason else ""}'
+        elif at == ActionType.COMPARE:
+            a_name = args.get("product_a", "one option")
+            b_name = args.get("product_b", "another")
+            return f"start comparing {a_name} and {b_name}"
+        elif at == ActionType.PURCHASE:
+            product = args.get("product", "something")
+            return f"decide to purchase {product}"
+        return f"take action: {at.value}"
+
+    async def _reactive_micro_round_actions(
+        self,
+        action_entries: list[ActionEntry],
+        agents: list[AgentPersona],
+        world_state: WorldState,
+    ) -> list[ReactiveResponse]:
+        reactions: list[ReactiveResponse] = []
+        agent_map = {a.id: a for a in agents}
+
+        for entry in action_entries[:4]:
+            actor = agent_map.get(entry.agent_id)
+            if not actor:
+                continue
+
+            witnesses = self.gossip.social_neighbors(actor, agents, count=3)
+            if not witnesses:
+                witnesses = [a for a in agents if a.id != entry.agent_id][:3]
+            witnesses = [w for w in witnesses if w.id != entry.agent_id][:3]
+            if not witnesses:
+                continue
+
+            action_desc = self._describe_action_for_reaction(entry)
+            is_market = self._is_market_simulation(world_state)
+
+            prompts = []
+            prompt_witnesses = []
+            for w in witnesses:
+                if self._should_stay_silent(w, False):
+                    reactions.append(ReactiveResponse(
+                        agent_id=w.id, agent_name=w.name,
+                        reaction_type="silent", location=w.location,
+                    ))
+                    continue
+
+                faction_info = f"You belong to {w.faction}." if w.faction else "You don't belong to any faction."
+                beliefs = "\n".join(f"- {b}" for b in w.beliefs[:5]) or "Still forming opinions."
+                recent_memory = "\n".join(w.working_memory[-3:]) or "Just arrived."
+                nudge = self._conformity_nudge(w)
+                style_key = getattr(w, "communication_style", "emotional")
+                style_desc = COMMUNICATION_STYLES.get(style_key, COMMUNICATION_STYLES["emotional"])
+                comm_style = f"{style_key} — {style_desc}"
+
+                p = w.personality
+                market_traits = ""
+                if is_market:
+                    market_traits = (
+                        f"Consumer traits: brand_loyalty={p.brand_loyalty:.1f}, "
+                        f"price_sensitivity={p.price_sensitivity:.1f}, "
+                        f"social_proof={p.social_proof:.1f}, "
+                        f"novelty_seeking={p.novelty_seeking:.1f}"
+                    )
+
+                prompt = (
+                    REACTIVE_ACTION_PROMPT.format(
+                        name=w.name,
+                        role=w.role,
+                        world_name=world_state.blueprint.name,
+                        mood=w.emotional_state,
+                        conformity=p.conformity,
+                        confrontational=p.confrontational,
+                        empathy=p.empathy,
+                        market_traits=market_traits,
+                        faction_info=faction_info,
+                        conformity_nudge=nudge,
+                        communication_style=comm_style,
+                        beliefs=beliefs,
+                        recent_memory=recent_memory,
+                        actor=entry.agent_name,
+                        action_description=action_desc,
+                    ),
+                    ""
+                )
+                prompts.append(prompt)
+                prompt_witnesses.append(w)
+
+            if not prompts:
+                continue
+
+            responses = await self.llm.generate_batch(
+                [(p[0], p[1] or "React.") for p in prompts],
+                json_mode=False,
+                max_tokens=150,
+            )
+
+            for w, resp in zip(prompt_witnesses, responses):
                 resp = resp.strip()
                 if not resp:
                     continue
@@ -913,6 +1462,8 @@ class SimulationEngine:
                     agent.working_memory.append(
                         f"Day {world_state.day}: Researched '{entry.action_args.get('query', '')}' — {result[:150]}"
                     )
+                    if getattr(agent, "knowledge_level", "full") != "full":
+                        agent.knowledge_level = "full"
                 else:
                     agent.working_memory.append(
                         f"Day {world_state.day}: Tried to research but couldn't find useful information."
@@ -1093,8 +1644,13 @@ class SimulationEngine:
 
         description = data.get("description", event_text)
 
-        for agent in agents:
-            agent.working_memory.append(f"Day {world_state.day}: INJECTED EVENT — {description[:100]}")
+        self.gossip.inject_event_via_gossip(
+            sim_id=simulation_id,
+            event_desc=description,
+            agents=agents,
+            round_num=-1,
+            day=world_state.day,
+        )
 
         world_state.active_disputes.append(f"Event: {description[:80]}")
         if len(world_state.active_disputes) > 10:
