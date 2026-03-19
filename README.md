@@ -16,6 +16,7 @@
 
 ---
 
+Live Website: https://mirosociety.com/  <br /><br />
 MiroSociety is a multi-agent simulation engine that lets you write the rules of a world in plain English and watch AI agents live under them. Emergent behavior — institutions, conflicts, alliances, revolts, quiet compliance — arises from nothing but your rules and agent personalities.
 
 It runs two modes:
