@@ -1,5 +1,5 @@
 <template>
-  <div class="border-t border-slate-800/40 h-9 flex items-center px-4 gap-4 shrink-0 bg-slate-900/30">
+  <div class="border-t border-gray-200 h-10 flex items-center px-5 gap-4 shrink-0 bg-white/80 backdrop-blur-sm">
     <MetricBar
       v-for="m in SOCIAL_METRICS"
       :key="m.key"
@@ -9,7 +9,7 @@
       :label="m.label"
     />
     <template v-if="showMarket">
-      <div class="w-px h-4 bg-slate-700/60"></div>
+      <div class="w-px h-4 bg-gray-200"></div>
       <MetricBar
         v-for="m in MARKET_METRICS"
         :key="m.key"

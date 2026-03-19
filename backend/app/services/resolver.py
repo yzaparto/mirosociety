@@ -1,8 +1,9 @@
 from __future__ import annotations
 import logging
+import random
 import uuid
 
-from app.models.agent import AgentPersona
+from app.models.agent import AgentPersona, SocialEdge
 from app.models.action import ActionType, AgentDecision, ActionEntry
 from app.models.world import WorldState, WorldMetrics, Institution, Proposal
 from app.constants import TIMES_OF_DAY, normalize_emotional_state
@@ -40,6 +41,24 @@ class ActionResolver:
                 agent.relationships[key] = " | ".join(parts)
         else:
             agent.relationships[key] = description
+
+    @staticmethod
+    def _strengthen_social_edge(
+        agent: AgentPersona,
+        target_id: int,
+        strength_delta: float = 0.05,
+        sentiment_delta: float = 0.0,
+    ):
+        for edge in agent.social_connections:
+            if edge.target_id == target_id:
+                edge.strength = min(1.0, max(0.0, edge.strength + strength_delta))
+                edge.sentiment = min(1.0, max(-1.0, edge.sentiment + sentiment_delta))
+                return
+        agent.social_connections.append(SocialEdge(
+            target_id=target_id,
+            strength=min(1.0, max(0.0, 0.3 + strength_delta)),
+            sentiment=min(1.0, max(-1.0, sentiment_delta)),
+        ))
 
     def resolve(
         self,
@@ -84,7 +103,11 @@ class ActionResolver:
 
         world_state.metrics = self._update_metrics(world_state.metrics, entries, world_state)
 
-        return entries, world_state, list(agent_map.values())
+        all_agents = list(agent_map.values())
+        self._emotional_contagion(all_agents)
+        self._emotional_decay(all_agents)
+
+        return entries, world_state, all_agents
 
     def _process_decision(
         self,
@@ -105,6 +128,15 @@ class ActionResolver:
         if at == ActionType.SPEAK_PUBLIC:
             if decision.speech:
                 action_args["content"] = decision.speech
+            listeners = [
+                a for a in agent_map.values()
+                if a.id != agent.id and a.location == agent.location
+            ]
+            if not listeners:
+                listeners = [a for a in agent_map.values() if a.id != agent.id]
+            for listener in listeners:
+                self._strengthen_social_edge(agent, listener.id, 0.03, 0.01)
+                self._strengthen_social_edge(listener, agent.id, 0.03, 0.01)
 
         elif at == ActionType.SPEAK_PRIVATE:
             raw_target = action_args.get("target_id")
@@ -116,6 +148,8 @@ class ActionResolver:
                     action_args["content"] = decision.speech
                 rel_changes[str(target_id)] = "private_conversation"
                 self._update_relationship(agent, target_id, "private_conversation")
+                self._strengthen_social_edge(agent, target_id, 0.05, 0.02)
+                self._strengthen_social_edge(agent_map[target_id], agent.id, 0.05, 0.02)
 
         elif at == ActionType.TRADE:
             raw_target = action_args.get("target_id")
@@ -145,6 +179,8 @@ class ActionResolver:
                     world_changes["trade"] = True
                     self._update_relationship(agent, target_id, f"Trade partner — exchanged {give_resource} for {receive_resource}")
                     self._update_relationship(target, agent.id, f"Trade partner — exchanged {receive_resource} for {give_resource}")
+                    self._strengthen_social_edge(agent, target_id, 0.08, 0.05)
+                    self._strengthen_social_edge(target, agent.id, 0.08, 0.05)
                     rel_changes[str(target_id)] = "trade_partner"
 
         elif at == ActionType.FORM_GROUP:
@@ -176,6 +212,8 @@ class ActionResolver:
                     if mid != agent.id:
                         self._update_relationship(agent_map[mid], agent.id, f"Fellow member of {group_name}")
                         self._update_relationship(agent, mid, f"Fellow member of {group_name}")
+                        self._strengthen_social_edge(agent, mid, 0.1, 0.08)
+                        self._strengthen_social_edge(agent_map[mid], agent.id, 0.1, 0.08)
                         rel_changes[str(mid)] = "faction_ally"
             else:
                 inst = Institution(
@@ -265,9 +303,11 @@ class ActionResolver:
                 if other.id != agent.id:
                     if other.personality.conformity > 0.6:
                         self._update_relationship(other, agent.id, f"Saw {agent.name} defy the rules — lost respect")
+                        self._strengthen_social_edge(other, agent.id, 0.03, -0.15)
                         rel_changes[str(other.id)] = "lost_respect"
                     elif other.personality.confrontational > 0.6:
                         self._update_relationship(other, agent.id, f"Saw {agent.name} defy the rules — impressed")
+                        self._strengthen_social_edge(other, agent.id, 0.05, 0.1)
                         rel_changes[str(other.id)] = "impressed"
 
         elif at == ActionType.BUILD:
@@ -306,6 +346,8 @@ class ActionResolver:
                 if len(target.working_memory) > 9:
                     target.working_memory = target.working_memory[-9:]
                 self._update_relationship(agent, target_id, f"Recommended {product} to them")
+                self._strengthen_social_edge(agent, target_id, 0.06, 0.04)
+                self._strengthen_social_edge(target, agent.id, 0.06, 0.04)
                 rel_changes[str(target_id)] = "recommendation"
                 world_changes["recommendation"] = product
 
@@ -360,6 +402,8 @@ class ActionResolver:
                 agent.resources["knowledge"] = agent.resources.get("knowledge", 0) + 2
                 self._update_relationship(agent, target_id, f"Investigated — asked about '{action_args.get('question', '')[:40]}'")
                 self._update_relationship(agent_map[target_id], agent.id, f"Was questioned by {agent.name}")
+                self._strengthen_social_edge(agent, target_id, 0.04, 0.0)
+                self._strengthen_social_edge(agent_map[target_id], agent.id, 0.04, 0.0)
                 rel_changes[str(target_id)] = "investigated"
 
         return ActionEntry(
@@ -512,4 +556,83 @@ class ActionResolver:
             word_of_mouth=ema(old.word_of_mouth, d_word_of_mouth),
             churn_risk=ema(old.churn_risk, d_churn_risk),
             adoption_rate=ema(old.adoption_rate, d_adoption_rate),
+            information_spread=old.information_spread,
+            echo_chamber_index=old.echo_chamber_index,
+            rumor_distortion=old.rumor_distortion,
         )
+
+    @staticmethod
+    def _emotional_contagion(agents: list[AgentPersona]):
+        """Emotions spread through the social graph. If most of your strong connections
+        are angry/frustrated, you drift negative even if your own experience is fine.
+        Gated by social_proof — high social_proof agents are more susceptible."""
+        NEGATIVE_STATES = {"angry", "frustrated", "fearful", "hostile", "desperate"}
+        POSITIVE_STATES = {"calm", "content", "curious", "satisfied", "hopeful"}
+        SUSCEPTIBLE_STATES = POSITIVE_STATES | {"restless", "uneasy", "confused"}
+
+        agent_map = {a.id: a for a in agents}
+        changes: list[tuple[AgentPersona, str]] = []
+
+        for agent in agents:
+            if agent.emotional_state not in SUSCEPTIBLE_STATES:
+                continue
+            strong_neighbors = [
+                e for e in agent.social_connections if e.strength > 0.5
+            ]
+            if not strong_neighbors:
+                continue
+
+            neighbor_states = []
+            for edge in strong_neighbors:
+                other = agent_map.get(edge.target_id)
+                if other:
+                    neighbor_states.append(other.emotional_state)
+
+            if not neighbor_states:
+                continue
+
+            negative_ratio = sum(1 for s in neighbor_states if s in NEGATIVE_STATES) / len(neighbor_states)
+            positive_ratio = sum(1 for s in neighbor_states if s in POSITIVE_STATES) / len(neighbor_states)
+
+            susceptibility = agent.personality.social_proof * 0.6 + agent.personality.empathy * 0.3
+
+            if negative_ratio > 0.5 and random.random() < negative_ratio * susceptibility:
+                if agent.emotional_state in POSITIVE_STATES:
+                    changes.append((agent, "uneasy"))
+                elif agent.emotional_state in ("restless", "uneasy"):
+                    changes.append((agent, "frustrated"))
+            elif positive_ratio > 0.7 and agent.emotional_state in ("uneasy", "restless") and random.random() < 0.2:
+                changes.append((agent, "calm"))
+
+        for agent, new_state in changes:
+            agent.emotional_state = new_state
+
+    EMOTIONAL_DECAY_MAP = {
+        "angry": "frustrated",
+        "hostile": "angry",
+        "desperate": "fearful",
+        "fearful": "anxious",
+        "frustrated": "restless",
+        "restless": "uneasy",
+        "uneasy": "calm",
+        "anxious": "uneasy",
+    }
+
+    @classmethod
+    def _emotional_decay(cls, agents: list[AgentPersona]):
+        """Without reinforcement, extreme emotions gradually fade.
+        Base ~25% chance per round, boosted for conformist/loyal agents who
+        psychologically accept changes faster. This counterbalances contagion
+        to prevent uniform negativity cascades."""
+        for agent in agents:
+            if agent.emotional_state in cls.EMOTIONAL_DECAY_MAP:
+                p = agent.personality
+                decay_prob = 0.25
+                if p.conformity >= 0.6:
+                    decay_prob += 0.12
+                if p.brand_loyalty >= 0.6:
+                    decay_prob += 0.10
+                if p.confrontational <= 0.3:
+                    decay_prob += 0.08
+                if random.random() < min(0.65, decay_prob):
+                    agent.emotional_state = cls.EMOTIONAL_DECAY_MAP[agent.emotional_state]

@@ -264,6 +264,37 @@ class CitizenGenerator:
             self._assign_knowledge_levels(agents)
         return agents
 
+    async def generate_fast(
+        self,
+        blueprint: WorldBlueprint,
+        count: int = 25,
+        on_citizen: Callable[[AgentPersona], Awaitable[None]] | None = None,
+        proposed_change: str | None = None,
+        segments: list[dict] | None = None,
+        demographics: DemographicProfile | None = None,
+    ) -> list[AgentPersona]:
+        """Phase 1: generate cast + personas only. Returns agents that are
+        functional but lack life histories and relationships. This is enough
+        for the simulation engine to start running immediately."""
+        cast = await self._generate_cast(blueprint, count, proposed_change, segments, demographics)
+        agents = await self._generate_personas(blueprint, cast, on_citizen)
+        if proposed_change:
+            self._assign_knowledge_levels(agents)
+        return agents
+
+    async def enrich_background(
+        self,
+        blueprint: WorldBlueprint,
+        agents: list[AgentPersona],
+    ) -> list[AgentPersona]:
+        """Phase 2: add life histories + relationships. Can run concurrently
+        while the simulation is already ticking. Agents are mutated in place."""
+        await self._generate_life_histories(blueprint, agents)
+        self._apply_all_trait_modifiers(agents)
+        self._enforce_life_diversity(agents)
+        agents = await self._generate_relationships(blueprint, agents)
+        return agents
+
     @staticmethod
     def _assign_knowledge_levels(agents: list[AgentPersona]):
         """Not everyone knows about the change on day 1. Heavy users and

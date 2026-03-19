@@ -29,10 +29,10 @@ defineProps({
 defineEmits(['dismiss'])
 
 const typeClasses = {
-  info: 'bg-emerald-950 border-emerald-800 text-emerald-200',
-  danger: 'bg-red-950 border-red-800 text-red-200',
-  warning: 'bg-amber-950 border-amber-800 text-amber-200',
-  institution: 'bg-violet-950 border-violet-800 text-violet-200',
+  info: 'bg-emerald-50 border-emerald-300 text-emerald-800',
+  danger: 'bg-red-50 border-red-300 text-red-800',
+  warning: 'bg-amber-50 border-amber-300 text-amber-800',
+  institution: 'bg-violet-50 border-violet-300 text-violet-800',
 }
 </script>
 

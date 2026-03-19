@@ -20,10 +20,10 @@ export function moodCategory(state) {
 export function moodDotClass(state) {
   const cat = moodCategory(state)
   return {
-    positive: 'bg-emerald-400',
-    uneasy: 'bg-amber-400',
-    hostile: 'bg-red-400',
-    conflicted: 'bg-violet-400',
+    positive: 'bg-emerald-500',
+    uneasy: 'bg-amber-500',
+    hostile: 'bg-red-500',
+    conflicted: 'bg-violet-500',
     neutral: 'bg-slate-400',
   }[cat]
 }
@@ -31,15 +31,26 @@ export function moodDotClass(state) {
 export function moodBgClass(state) {
   const cat = moodCategory(state)
   return {
-    positive: 'bg-emerald-800 border-emerald-600 text-emerald-100',
-    uneasy: 'bg-amber-800 border-amber-600 text-amber-100',
-    hostile: 'bg-red-800 border-red-600 text-red-100',
-    conflicted: 'bg-violet-800 border-violet-600 text-violet-100',
-    neutral: 'bg-slate-700 border-slate-600 text-slate-300',
+    positive: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    uneasy: 'bg-amber-50 border-amber-200 text-amber-800',
+    hostile: 'bg-red-50 border-red-200 text-red-800',
+    conflicted: 'bg-violet-50 border-violet-200 text-violet-800',
+    neutral: 'bg-gray-100 border-gray-200 text-gray-700',
   }[cat]
 }
 
 export function moodNodeFill(state) {
+  const cat = moodCategory(state)
+  return {
+    positive: '#34d399',
+    uneasy: '#fbbf24',
+    hostile: '#f87171',
+    conflicted: '#a78bfa',
+    neutral: '#94a3b8',
+  }[cat]
+}
+
+export function moodNodeStroke(state) {
   const cat = moodCategory(state)
   return {
     positive: '#059669',
@@ -50,24 +61,6 @@ export function moodNodeFill(state) {
   }[cat]
 }
 
-export function moodNodeStroke(state) {
-  const cat = moodCategory(state)
-  return {
-    positive: '#6ee7b7',
-    uneasy: '#fbbf24',
-    hostile: '#f87171',
-    conflicted: '#a78bfa',
-    neutral: '#94a3b8',
-  }[cat]
-}
-
 export function speechBubbleClass(state) {
-  const cat = moodCategory(state)
-  return {
-    positive: 'bg-slate-100 text-slate-900',
-    uneasy: 'bg-slate-100 text-slate-900',
-    hostile: 'bg-slate-100 text-slate-900',
-    conflicted: 'bg-slate-100 text-slate-900',
-    neutral: 'bg-slate-100 text-slate-900',
-  }[cat]
+  return 'bg-white text-slate-900 shadow-lg border border-gray-100'
 }

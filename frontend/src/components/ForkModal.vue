@@ -3,7 +3,7 @@
     <div class="p-6 space-y-5">
       <div>
         <h3 class="font-semibold text-lg">Fork Simulation</h3>
-        <p class="text-sm text-slate-400 mt-1">Create an alternate timeline from a specific day. The fork copies all state up to that day, then applies your changes.</p>
+        <p class="text-sm text-slate-500 mt-1">Create an alternate timeline from a specific day. The fork copies all state up to that day, then applies your changes.</p>
       </div>
 
       <div>
@@ -13,7 +13,7 @@
           type="number"
           :min="1"
           :max="maxDay"
-          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors"
+          class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors"
         />
       </div>
 
@@ -22,7 +22,7 @@
         <textarea
           v-model="localChanges"
           rows="3"
-          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-none transition-colors"
+          class="w-full bg-gray-100 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-none transition-colors"
           placeholder="Describe what's different in this fork..."
         ></textarea>
       </div>
@@ -32,7 +32,7 @@
           v-for="preset in presets"
           :key="preset"
           @click="localChanges = preset"
-          class="text-[11px] px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:text-blue-400 hover:border-blue-500 hover:bg-blue-950/30 transition-all active:scale-[0.97]"
+          class="text-[11px] px-3 py-1.5 rounded-full bg-gray-100 border border-gray-300 text-slate-500 hover:text-blue-600 hover:border-blue-500 hover:bg-blue-50 transition-all active:scale-[0.97]"
         >
           {{ preset }}
         </button>
@@ -43,7 +43,7 @@
         <button
           @click="fork"
           :disabled="forking"
-          class="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 text-sm font-medium transition-colors disabled:opacity-50 active:scale-[0.97]"
+          class="px-5 py-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 text-sm font-medium transition-colors disabled:opacity-50 active:scale-[0.97] shadow-sm"
         >
           {{ forking ? 'Forking...' : 'Create Fork' }}
         </button>

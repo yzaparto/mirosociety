@@ -1,6 +1,6 @@
 <template>
   <div v-if="scorecard?.length">
-    <h2 class="text-xl font-semibold mb-4">Scorecard</h2>
+    <h2 class="section-title">Scorecard</h2>
     <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
       <div
         v-for="s in scorecard"
@@ -8,7 +8,7 @@
         :class="['border rounded-lg p-4 transition-colors', cardBg(s.rating)]"
       >
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-slate-400">{{ s.label }}</span>
+          <span class="text-xs text-slate-500">{{ s.label }}</span>
           <span :class="['text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded', ratingColor(s.rating)]">
             {{ s.rating }}
           </span>
@@ -71,22 +71,22 @@ function sparklineStroke(rating) {
 }
 
 function ratingColor(rating) {
-  if (rating === 'excellent' || rating === 'strong') return 'bg-emerald-500/20 text-emerald-400'
-  if (rating === 'moderate') return 'bg-amber-500/20 text-amber-400'
-  if (rating === 'weak') return 'bg-orange-500/20 text-orange-400'
-  return 'bg-red-500/20 text-red-400'
+  if (rating === 'excellent' || rating === 'strong') return 'bg-emerald-500/20 text-emerald-600'
+  if (rating === 'moderate') return 'bg-amber-500/20 text-amber-600'
+  if (rating === 'weak') return 'bg-orange-500/20 text-orange-600'
+  return 'bg-red-500/20 text-red-600'
 }
 
 function cardBg(rating) {
-  if (rating === 'excellent' || rating === 'strong') return 'bg-emerald-950/20 border-emerald-900/30'
-  if (rating === 'moderate') return 'bg-amber-950/20 border-amber-900/30'
-  if (rating === 'weak') return 'bg-orange-950/20 border-orange-900/30'
-  return 'bg-slate-900/60 border-slate-800/40'
+  if (rating === 'excellent' || rating === 'strong') return 'bg-emerald-50 border-emerald-200'
+  if (rating === 'moderate') return 'bg-amber-50 border-amber-200'
+  if (rating === 'weak') return 'bg-orange-50 border-orange-200'
+  return 'bg-white border-gray-200'
 }
 
 function trendColor(trend) {
-  if (trend === 'up') return 'text-emerald-400'
-  if (trend === 'down') return 'text-red-400'
+  if (trend === 'up') return 'text-emerald-600'
+  if (trend === 'down') return 'text-red-600'
   return 'text-slate-500'
 }
 </script>

@@ -4,6 +4,9 @@ export const SOCIAL_METRICS = [
   { key: 'trust', label: 'Trust', color: 'bg-violet-400', goodHigh: true },
   { key: 'freedom', label: 'Freedom', color: 'bg-amber-400', goodHigh: true },
   { key: 'conflict', label: 'Conflict', color: 'bg-red-500', goodHigh: false },
+  { key: 'information_spread', label: 'Info Spread', color: 'bg-cyan-400', goodHigh: true },
+  { key: 'echo_chamber_index', label: 'Echo Chamber', color: 'bg-orange-400', goodHigh: false },
+  { key: 'rumor_distortion', label: 'Distortion', color: 'bg-rose-400', goodHigh: false },
 ]
 
 export const MARKET_METRICS = [

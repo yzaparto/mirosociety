@@ -163,7 +163,9 @@
                 </button>
 
                 <p class="text-center text-[10px] text-slate-400 leading-snug">
-                  Powered by multi-agent AI<br>No scripts, no predefined outcomes
+                  Estimated runtime: <span class="text-slate-500 font-medium">{{ estimatedTime }}</span>
+                  <span class="text-slate-300 mx-0.5">&middot;</span>
+                  {{ population * duration * 3 }} rounds
                 </p>
               </div>
 
@@ -202,6 +204,50 @@ const durationOptions = [
 ]
 
 const visiblePresets = computed(() => presets.value.slice(0, 8))
+
+const estimatedTime = computed(() => {
+  const agents = population.value
+  const days = duration.value
+  const roundsPerDay = 3
+  const totalRounds = days * roundsPerDay
+
+  const activeMin = 3
+  const activeMax = Math.max(3, Math.floor(agents * 0.4))
+  const avgActive = Math.ceil((activeMin + activeMax) / 2)
+
+  const concurrency = 10
+  const avgLatency = 1.8
+
+  const decisionBatches = Math.ceil(avgActive / concurrency)
+  const decisionTime = decisionBatches * avgLatency
+
+  const speechCount = Math.min(5, Math.ceil(avgActive * 0.4))
+  const witnessesPerSpeech = Math.min(4, agents - 1)
+  const silenceRate = 0.55
+  const reactiveCallsSpeech = Math.ceil(speechCount * witnessesPerSpeech * (1 - silenceRate))
+  const reactiveBatchesSpeech = Math.ceil(reactiveCallsSpeech / concurrency)
+
+  const actionCount = Math.min(4, Math.ceil(avgActive * 0.25))
+  const witnessesPerAction = Math.min(3, agents - 1)
+  const reactiveCallsAction = Math.ceil(actionCount * witnessesPerAction * (1 - silenceRate))
+  const reactiveBatchesAction = Math.ceil(reactiveCallsAction / concurrency)
+
+  const reactionTime = (reactiveBatchesSpeech + reactiveBatchesAction) * avgLatency
+  const narrationTime = avgLatency
+
+  const perRound = decisionTime + reactionTime + narrationTime
+  const totalSec = totalRounds * perRound
+
+  const setupSec = avgLatency + (Math.ceil(agents / concurrency) * avgLatency) + 2
+
+  const totalEstimate = setupSec + totalSec
+
+  if (totalEstimate < 60) return `~${Math.round(totalEstimate)}s`
+  if (totalEstimate < 3600) return `~${Math.round(totalEstimate / 60)} min`
+  const hrs = Math.floor(totalEstimate / 3600)
+  const mins = Math.round((totalEstimate % 3600) / 60)
+  return `~${hrs}h ${mins}m`
+})
 
 function addSegment() { segments.value.push({ name: '', description: '' }) }
 function removeSegment(i) { segments.value.splice(i, 1) }

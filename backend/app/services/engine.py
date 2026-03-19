@@ -311,6 +311,8 @@ class SimulationEngine:
         self._speed: dict[str, SpeedMode] = {}
         self._total_actions: dict[str, int] = {}
         self._last_narrative: dict[str, str] = {}
+        self._enriched_agents: dict[str, list[AgentPersona]] = {}
+        self._enrichment_ready: dict[str, asyncio.Event] = {}
 
     async def _wait_if_paused(self, simulation_id: str) -> bool:
         """Block while paused. Returns False if the simulation was stopped."""
@@ -318,6 +320,34 @@ class SimulationEngine:
             return False
         await self._paused[simulation_id].wait()
         return self._running.get(simulation_id, False)
+
+    def deliver_enriched_agents(self, simulation_id: str, agents: list[AgentPersona]):
+        """Called from outside when background enrichment finishes. The engine
+        will hot-swap the agent list at the start of the next round."""
+        self._enriched_agents[simulation_id] = agents
+        ev = self._enrichment_ready.get(simulation_id)
+        if ev:
+            ev.set()
+
+    def _check_enrichment(self, simulation_id: str, agents: list[AgentPersona]) -> list[AgentPersona]:
+        """If enriched agents have arrived, merge life_state, social_connections,
+        and relationships into the live agent list (preserving working_memory,
+        core_memory, beliefs, resources, and other mutable state accumulated
+        during the first rounds)."""
+        enriched = self._enriched_agents.pop(simulation_id, None)
+        if enriched is None:
+            return agents
+        enriched_map = {a.id: a for a in enriched}
+        for agent in agents:
+            src = enriched_map.get(agent.id)
+            if src is None:
+                continue
+            agent.life_state = src.life_state
+            agent.social_connections = src.social_connections
+            if src.relationships:
+                agent.relationships = src.relationships
+        logger.info("Enriched %d agents for sim %s", len(enriched_map), simulation_id)
+        return agents
 
     async def run(
         self,
@@ -333,6 +363,7 @@ class SimulationEngine:
         self._speed[simulation_id] = SpeedMode.LIVE
         self._total_actions[simulation_id] = 0
         self._last_narrative[simulation_id] = ""
+        self._enrichment_ready[simulation_id] = asyncio.Event()
         self.gossip.init_simulation(simulation_id)
 
         total_rounds = world_state.blueprint.time_config.total_days * world_state.blueprint.time_config.rounds_per_day
@@ -345,6 +376,8 @@ class SimulationEngine:
             while round_num < total_rounds and self._running.get(simulation_id, False):
                 if not await self._wait_if_paused(simulation_id):
                     break
+
+                agents = self._check_enrichment(simulation_id, agents)
 
                 round_num += 1
                 world_state.round_in_day = (round_num - 1) % world_state.blueprint.time_config.rounds_per_day
@@ -366,11 +399,14 @@ class SimulationEngine:
 
                 life_events_this_round = []
                 if self.life_engine:
-                    life_events_this_round = await self.life_engine.evaluate(agents, world_state, round_num)
-                    for agent, event_desc in life_events_this_round:
-                        agent.working_memory.append(f"Day {world_state.day}: {event_desc}")
-                        if len(agent.working_memory) > 9:
-                            agent.working_memory = agent.working_memory[-9:]
+                    try:
+                        life_events_this_round = await self.life_engine.evaluate(agents, world_state, round_num)
+                        for agent, event_desc in life_events_this_round:
+                            agent.working_memory.append(f"Day {world_state.day}: {event_desc}")
+                            if len(agent.working_memory) > 9:
+                                agent.working_memory = agent.working_memory[-9:]
+                    except Exception as life_err:
+                        logger.warning("LifeEngine failed for round %d: %s", round_num, life_err)
 
                 decisions = await self._batch_decisions(active, world_state, agents)
 
@@ -541,12 +577,16 @@ class SimulationEngine:
             logger.error("Simulation %s failed: %s", simulation_id, e, exc_info=True)
             await emit(SSEEvent(type="error", data={"message": str(e)}))
             await self.store.update_status(simulation_id, SimulationStatus.ERROR.value)
+            if self._total_actions.get(simulation_id, 0) > 0:
+                asyncio.create_task(self._generate_report_background(simulation_id))
         finally:
             self._running.pop(simulation_id, None)
             self._paused.pop(simulation_id, None)
             self._speed.pop(simulation_id, None)
             self._total_actions.pop(simulation_id, None)
             self._last_narrative.pop(simulation_id, None)
+            self._enriched_agents.pop(simulation_id, None)
+            self._enrichment_ready.pop(simulation_id, None)
             self.tension.cleanup(simulation_id)
             self.gossip.cleanup(simulation_id)
 

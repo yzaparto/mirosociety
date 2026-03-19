@@ -141,7 +141,7 @@ async def simulate(req: SimulateRequest, request: Request):
                 await event_queue.put(SSEEvent(type="citizen_generated", data=agent.model_dump()))
 
             segments_dicts = [s.model_dump() for s in req.segments] if req.segments else None
-            agents = await citizen_gen.generate(
+            agents = await citizen_gen.generate_fast(
                 blueprint, req.population, on_citizen=on_citizen,
                 proposed_change=req.proposed_change,
                 segments=segments_dicts,
@@ -155,6 +155,18 @@ async def simulate(req: SimulateRequest, request: Request):
             if sim_id in cancelled:
                 await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
                 return
+
+            async def enrich_in_background():
+                try:
+                    enriched = await citizen_gen.enrich_background(blueprint, agents)
+                    engine.deliver_enriched_agents(sim_id, enriched)
+                    for agent in enriched:
+                        await store.save_agent(sim_id, agent)
+                    logger.info("Background enrichment complete for %s", sim_id)
+                except Exception as e:
+                    logger.warning("Background enrichment failed for %s: %s", sim_id, e)
+
+            asyncio.create_task(enrich_in_background())
 
             world_state = WorldState(
                 blueprint=blueprint,

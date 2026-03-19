@@ -1444,7 +1444,25 @@ onMounted(() => {
     router.push('/')
   })
 
-  es.addEventListener('error', (e) => { console.error('SSE error:', e) })
+  es.addEventListener('error', (e) => {
+    let msg = 'Simulation encountered an error'
+    try {
+      if (e.data) {
+        const d = JSON.parse(e.data)
+        if (d.message) msg = d.message
+      }
+    } catch (_) { /* transport-level error, no data */ }
+    console.error('SSE error:', msg, e)
+    if (phase.value !== 'complete') {
+      phase.value = 'complete'
+      Object.keys(speechBubbles).forEach(k => delete speechBubbles[k])
+      Object.keys(actorFlash).forEach(k => delete actorFlash[k])
+      addToast('Simulation error — a partial report may be available', 'error')
+      localStorage.removeItem('mirosociety_active_sim')
+      es.close()
+      eventSource = null
+    }
+  })
 })
 
 onUnmounted(() => {

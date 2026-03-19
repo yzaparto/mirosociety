@@ -4,7 +4,7 @@
     :class="[
       'rounded-full flex items-center justify-center font-bold border cursor-pointer transition-all',
       moodBgClass(agent.emotional_state),
-      selected ? 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-slate-950' : '',
+      selected ? 'ring-2 ring-emerald-400 ring-offset-1 ring-offset-[#fafafa]' : '',
       sizeClasses,
     ]"
     :title="agent.name"

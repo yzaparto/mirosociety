@@ -3,9 +3,9 @@
     <div class="max-w-6xl mx-auto px-6">
 
       <div v-if="loading" class="text-center py-20">
-        <div class="inline-flex items-center gap-3 bg-slate-900/60 border border-slate-800/40 rounded-lg px-5 py-3">
+        <div class="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-5 py-3">
           <div class="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-slate-300 text-sm">Loading comparison...</span>
+          <span class="text-slate-700 text-sm">Loading comparison...</span>
         </div>
       </div>
 
@@ -18,44 +18,44 @@
         <!-- Side by side summaries with split metaphor -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-0 relative">
           <!-- Divider line -->
-          <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-slate-700/60 -translate-x-1/2 z-10">
-            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-950 px-2 py-1 text-[9px] text-slate-600 uppercase tracking-wider">vs</div>
+          <div class="hidden md:block absolute left-1/2 top-0 bottom-0 w-px bg-gray-300 -translate-x-1/2 z-10">
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#fafafa] px-2 py-1 text-[9px] text-slate-400 uppercase tracking-wider">vs</div>
           </div>
 
-          <div class="bg-slate-900/60 border border-emerald-800/30 rounded-l-lg md:rounded-r-none rounded-lg md:rounded-l-lg p-5">
-            <div class="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <div class="bg-white border border-emerald-200 rounded-l-lg md:rounded-r-none rounded-lg md:rounded-l-lg p-5">
+            <div class="text-xs text-emerald-600 font-medium uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
               Original Timeline
             </div>
             <h2 class="text-lg font-semibold mb-2">{{ sourceHeadline }}</h2>
-            <p class="text-sm text-slate-400 leading-relaxed">{{ sourceSummary }}</p>
+            <p class="text-sm text-slate-500 leading-relaxed">{{ sourceSummary }}</p>
             <div class="text-xs text-slate-500 mt-3">{{ data.source.final_day }} days simulated</div>
           </div>
-          <div class="bg-slate-900/60 border border-blue-800/30 md:rounded-l-none rounded-lg md:rounded-r-lg p-5">
-            <div class="text-xs text-blue-400 font-medium uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <div class="bg-white border border-blue-200 md:rounded-l-none rounded-lg md:rounded-r-lg p-5">
+            <div class="text-xs text-blue-600 font-medium uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <div class="w-2 h-2 rounded-full bg-blue-400"></div>
               Forked Timeline
             </div>
             <h2 class="text-lg font-semibold mb-2">{{ forkHeadline }}</h2>
-            <p class="text-sm text-slate-400 leading-relaxed">{{ forkSummary }}</p>
+            <p class="text-sm text-slate-500 leading-relaxed">{{ forkSummary }}</p>
             <div class="text-xs text-slate-500 mt-3">{{ data.fork.final_day }} days simulated</div>
           </div>
         </div>
 
         <!-- Biggest Difference highlight -->
-        <div v-if="biggestDiff" class="bg-slate-900/40 border border-slate-800/30 rounded-xl p-5 text-center">
+        <div v-if="biggestDiff" class="bg-gray-50 border border-gray-200 rounded-xl p-5 text-center">
           <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Biggest Difference</div>
-          <div class="text-2xl font-bold font-mono" :class="biggestDiff.delta > 0 ? 'text-emerald-400' : 'text-red-400'">
+          <div class="text-2xl font-bold font-mono" :class="biggestDiff.delta > 0 ? 'text-emerald-600' : 'text-red-600'">
             {{ biggestDiff.delta > 0 ? '+' : '' }}{{ (biggestDiff.delta * 100).toFixed(0) }}%
           </div>
-          <div class="text-sm text-slate-400 mt-1">{{ biggestDiff.label }}</div>
+          <div class="text-sm text-slate-500 mt-1">{{ biggestDiff.label }}</div>
         </div>
 
         <!-- Metrics comparison with sparklines -->
         <div v-if="comparisonMetrics.length">
           <h2 class="section-title">Metrics Comparison</h2>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <div v-for="m in comparisonMetrics" :key="m.key" class="bg-slate-900/60 border border-slate-800/40 rounded-lg p-3">
+            <div v-for="m in comparisonMetrics" :key="m.key" class="bg-white border border-gray-200 rounded-lg p-3">
               <div class="text-xs text-slate-500 mb-2">{{ m.label }}</div>
 
               <!-- Sparkline overlay -->
@@ -78,17 +78,17 @@
 
               <div class="flex gap-3 items-end">
                 <div class="text-center">
-                  <div class="text-sm font-mono text-emerald-400">{{ m.sourceEnd.toFixed(2) }}</div>
-                  <div class="text-[10px] text-slate-600">Original</div>
+                  <div class="text-sm font-mono text-emerald-600">{{ m.sourceEnd.toFixed(2) }}</div>
+                  <div class="text-[10px] text-slate-400">Original</div>
                 </div>
-                <div class="text-slate-600 text-xs">→</div>
+                <div class="text-slate-400 text-xs">→</div>
                 <div class="text-center">
-                  <div class="text-sm font-mono text-blue-400">{{ m.forkEnd.toFixed(2) }}</div>
-                  <div class="text-[10px] text-slate-600">Fork</div>
+                  <div class="text-sm font-mono text-blue-600">{{ m.forkEnd.toFixed(2) }}</div>
+                  <div class="text-[10px] text-slate-400">Fork</div>
                 </div>
               </div>
               <div :class="['text-[10px] mt-1 font-medium',
-                m.delta > 0.05 ? 'text-emerald-500' : m.delta < -0.05 ? 'text-red-500' : 'text-slate-600']">
+                m.delta > 0.05 ? 'text-emerald-600' : m.delta < -0.05 ? 'text-red-600' : 'text-slate-400']">
                 {{ m.delta > 0 ? '+' : '' }}{{ (m.delta * 100).toFixed(0) }}%
               </div>
             </div>
@@ -103,20 +103,20 @@
         <!-- Key moments side by side -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div v-if="sourceKeyMoments.length">
-            <h2 class="text-lg font-semibold mb-3 text-emerald-400">Original Key Moments</h2>
-            <div class="border-l-2 border-emerald-800/50 pl-4 space-y-3">
+            <h2 class="text-lg font-semibold mb-3 text-emerald-600">Original Key Moments</h2>
+            <div class="border-l-2 border-emerald-300 pl-4 space-y-3">
               <div v-for="m in sourceKeyMoments" :key="m.day">
-                <div class="text-xs text-emerald-500 font-medium">Day {{ m.day }}</div>
+                <div class="text-xs text-emerald-600 font-medium">Day {{ m.day }}</div>
                 <div class="text-sm font-medium">{{ m.title }}</div>
                 <p class="text-xs text-slate-500">{{ m.description }}</p>
               </div>
             </div>
           </div>
           <div v-if="forkKeyMoments.length">
-            <h2 class="text-lg font-semibold mb-3 text-blue-400">Fork Key Moments</h2>
-            <div class="border-l-2 border-blue-800/50 pl-4 space-y-3">
+            <h2 class="text-lg font-semibold mb-3 text-blue-600">Fork Key Moments</h2>
+            <div class="border-l-2 border-blue-300 pl-4 space-y-3">
               <div v-for="m in forkKeyMoments" :key="m.day">
-                <div class="text-xs text-blue-500 font-medium">Day {{ m.day }}</div>
+                <div class="text-xs text-blue-600 font-medium">Day {{ m.day }}</div>
                 <div class="text-sm font-medium">{{ m.title }}</div>
                 <p class="text-xs text-slate-500">{{ m.description }}</p>
               </div>
@@ -129,30 +129,30 @@
           <h2 class="section-title">Market Outcome Comparison</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div v-if="data.source.report.market_analysis.aggregate" class="flex gap-2">
-              <div class="flex-1 bg-emerald-950/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-emerald-400">{{ data.source.report.market_analysis.aggregate.adopted_pct }}%</div>
+              <div class="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-emerald-600">{{ data.source.report.market_analysis.aggregate.adopted_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Adopted</div>
               </div>
-              <div class="flex-1 bg-slate-800/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-slate-300">{{ data.source.report.market_analysis.aggregate.neutral_pct }}%</div>
+              <div class="flex-1 bg-gray-100 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-slate-700">{{ data.source.report.market_analysis.aggregate.neutral_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Neutral</div>
               </div>
-              <div class="flex-1 bg-red-950/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-red-400">{{ data.source.report.market_analysis.aggregate.rejected_pct }}%</div>
+              <div class="flex-1 bg-red-50 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-red-600">{{ data.source.report.market_analysis.aggregate.rejected_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Rejected</div>
               </div>
             </div>
             <div v-if="data.fork.report.market_analysis.aggregate" class="flex gap-2">
-              <div class="flex-1 bg-emerald-950/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-emerald-400">{{ data.fork.report.market_analysis.aggregate.adopted_pct }}%</div>
+              <div class="flex-1 bg-emerald-50 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-emerald-600">{{ data.fork.report.market_analysis.aggregate.adopted_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Adopted</div>
               </div>
-              <div class="flex-1 bg-slate-800/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-slate-300">{{ data.fork.report.market_analysis.aggregate.neutral_pct }}%</div>
+              <div class="flex-1 bg-gray-100 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-slate-700">{{ data.fork.report.market_analysis.aggregate.neutral_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Neutral</div>
               </div>
-              <div class="flex-1 bg-red-950/40 rounded-lg p-3 text-center">
-                <div class="text-xl font-bold text-red-400">{{ data.fork.report.market_analysis.aggregate.rejected_pct }}%</div>
+              <div class="flex-1 bg-red-50 rounded-lg p-3 text-center">
+                <div class="text-xl font-bold text-red-600">{{ data.fork.report.market_analysis.aggregate.rejected_pct }}%</div>
                 <div class="text-[10px] text-slate-500">Rejected</div>
               </div>
             </div>
@@ -160,7 +160,7 @@
         </template>
 
         <!-- Actions -->
-        <div class="flex flex-wrap gap-3 pt-4 border-t border-slate-800/40">
+        <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
           <router-link :to="`/report/${data.source.id}`" class="btn-secondary">View Original Report</router-link>
           <router-link :to="`/report/${data.fork.id}`" class="btn-secondary">View Fork Report</router-link>
           <router-link to="/" class="btn-secondary">Run New Simulation</router-link>

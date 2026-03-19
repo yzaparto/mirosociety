@@ -1,7 +1,7 @@
 <template>
   <div class="flex items-center gap-1.5">
     <span class="text-[9px] text-slate-500 font-medium whitespace-nowrap">{{ label }}</span>
-    <div class="w-14 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+    <div class="w-14 h-1.5 bg-gray-100 rounded-full overflow-hidden">
       <div
         :class="['h-full rounded-full transition-all duration-700', barColor]"
         :style="{ width: pct + '%' }"
@@ -41,8 +41,8 @@ const trendArrow = computed(() => {
 
 const trendColorClass = computed(() => {
   const cfg = findMetricConfig(props.metricKey)
-  if (!cfg || delta.value === 0) return 'text-slate-600'
+  if (!cfg || delta.value === 0) return 'text-slate-400'
   const isGood = cfg.goodHigh ? delta.value > 0 : delta.value < 0
-  return isGood ? 'text-emerald-400' : 'text-red-400'
+  return isGood ? 'text-emerald-600' : 'text-red-600'
 })
 </script>

@@ -8,7 +8,7 @@
       >
         <div class="absolute inset-0 bg-black/60" @click="close"></div>
         <div
-          class="relative bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full mx-4"
+          class="relative bg-white border border-gray-300 rounded-xl shadow-2xl w-full mx-4"
           :class="maxWidthClass"
           ref="contentRef"
         >

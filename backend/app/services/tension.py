@@ -83,6 +83,31 @@ class TensionEngine:
         self._stable_rounds.pop(sim_id, None)
         self._quiet_rounds.pop(sim_id, None)
 
+    @staticmethod
+    def find_bridge_nodes(agents: list[AgentPersona]) -> list[int]:
+        faction_map: dict[str, set[int]] = {}
+        for a in agents:
+            if a.faction:
+                faction_map.setdefault(a.faction, set()).add(a.id)
+
+        if len(faction_map) < 2:
+            return []
+
+        bridges: list[int] = []
+        for agent in agents:
+            connected_factions: set[str] = set()
+            for edge in agent.social_connections:
+                if edge.strength < 0.3:
+                    continue
+                for faction, members in faction_map.items():
+                    if edge.target_id in members:
+                        connected_factions.add(faction)
+            if agent.faction:
+                connected_factions.add(agent.faction)
+            if len(connected_factions) >= 2:
+                bridges.append(agent.id)
+        return bridges
+
     async def check_and_apply(
         self,
         world_state: WorldState,
@@ -294,7 +319,8 @@ class TensionEngine:
             world_state.metrics.churn_risk = min(1.0, world_state.metrics.churn_risk + 0.08)
             world_state.metrics.brand_sentiment = max(0.0, world_state.metrics.brand_sentiment - 0.05)
 
-        affected = random.sample(agents, min(4, len(agents)))
+        initial_count = max(3, len(agents) // 3)
+        affected = random.sample(agents, min(initial_count, len(agents)))
         for agent in affected:
             event_belief = f"After the recent event: {event_desc[:60]} — things are changing"
             if event_belief not in agent.beliefs:
@@ -302,20 +328,14 @@ class TensionEngine:
                 if len(agent.beliefs) > 10:
                     agent.beliefs.pop(0)
 
-            if is_market:
-                action_prompt = random.choice([
-                    "This event makes me need to decide — am I staying or leaving?",
-                    "After hearing this, I should make a concrete decision about my purchase.",
-                    "This changes things — I need to act, not just talk about it.",
-                ])
-                agent.working_memory.append(f"Day {world_state.day}: MARKET EVENT — {event_desc[:80]}. {action_prompt}")
-            else:
-                agent.working_memory.append(f"Day {world_state.day}: EVENT — {event_desc[:100]}")
-
-            if len(agent.working_memory) > 9:
-                agent.working_memory = agent.working_memory[-9:]
+        self._event_initial_recipients = [a.id for a in affected]
 
         return world_state, agents, event_desc
+
+    def get_event_recipients(self) -> list[int] | None:
+        recipients = getattr(self, "_event_initial_recipients", None)
+        self._event_initial_recipients = None
+        return recipients
 
     async def _faction_fracture(
         self,

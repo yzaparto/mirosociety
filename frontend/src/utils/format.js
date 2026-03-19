@@ -8,7 +8,7 @@ export function escapeHtml(text) {
 }
 
 export function nameSpan(name) {
-  return `<span class="font-medium text-slate-100">${escapeHtml(name)}</span>`
+  return `<span class="font-medium text-slate-900">${escapeHtml(name)}</span>`
 }
 
 export function locIcon(type) {

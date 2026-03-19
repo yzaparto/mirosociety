@@ -38,6 +38,9 @@ class WorldMetrics(BaseModel):
     word_of_mouth: float = Field(default=0.0, ge=0.0, le=1.0)
     churn_risk: float = Field(default=0.2, ge=0.0, le=1.0)
     adoption_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    information_spread: float = Field(default=0.0, ge=0.0, le=1.0)
+    echo_chamber_index: float = Field(default=0.0, ge=0.0, le=1.0)
+    rumor_distortion: float = Field(default=0.0, ge=0.0, le=1.0)
 
 
 class Institution(BaseModel):

@@ -51,6 +51,9 @@ class SSEEvent(BaseModel):
         "injection_result",
         "simulation_complete",
         "error",
+        "cancelled",
+        "life_event",
+        "demographics_loaded",
     ]
     data: dict[str, Any] = Field(default_factory=dict)
 

@@ -72,7 +72,7 @@ CASCADE_RULES: dict[str, list[dict]] = {
     ],
 }
 
-LIFE_DOMAINS = ["finances", "career", "health"]
+LIFE_DOMAINS = {"finances", "career", "health"}
 
 
 class LifeEngine:
@@ -123,10 +123,11 @@ class LifeEngine:
                 surviving.append(p)
                 continue
 
-            domain_val = getattr(ls, p.domain, None)
-            if domain_val is not None and domain_val > 0.7 and p.severity < 0.4:
-                ls.life_log.append(f"Resolved pressure: {p.description}")
-                continue
+            if p.domain in LIFE_DOMAINS:
+                domain_val = getattr(ls, p.domain, None)
+                if domain_val is not None and domain_val > 0.7 and p.severity < 0.4:
+                    ls.life_log.append(f"Resolved pressure: {p.description}")
+                    continue
 
             age = current_day - p.created_day
             if age > 20 and p.severity < 0.3:
@@ -166,6 +167,8 @@ class LifeEngine:
 
         weighted_events: list[tuple[float, dict, str]] = []
         for domain, buckets in CATALOG.items():
+            if domain == "family" and not ls.family:
+                continue
             events = buckets.get(polarity, [])
             for evt in events:
                 weight = 1.0

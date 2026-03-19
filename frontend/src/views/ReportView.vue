@@ -1,31 +1,31 @@
 <template>
-  <div class="min-h-screen bg-slate-950 text-slate-200 py-12">
+  <div class="min-h-screen bg-[#fafafa] text-slate-800 py-12">
     <div class="max-w-4xl mx-auto px-6">
 
       <!-- Loading State -->
       <div v-if="loading" class="mt-16 space-y-6">
         <div class="text-center">
-          <div class="inline-flex items-center gap-3 bg-slate-900/60 border border-slate-800/40 rounded-lg px-5 py-3">
+          <div class="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-lg px-5 py-3">
             <div class="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-slate-300 text-sm">Analyzing simulation results...</span>
+            <span class="text-slate-700 text-sm">Analyzing simulation results...</span>
           </div>
         </div>
         <div class="space-y-4 animate-pulse">
-          <div class="h-20 bg-slate-900/40 rounded-xl"></div>
+          <div class="h-20 bg-gray-50 rounded-xl"></div>
           <div class="grid grid-cols-3 gap-3">
-            <div class="h-24 bg-slate-900/40 rounded-lg"></div>
-            <div class="h-24 bg-slate-900/40 rounded-lg"></div>
-            <div class="h-24 bg-slate-900/40 rounded-lg"></div>
+            <div class="h-24 bg-gray-50 rounded-lg"></div>
+            <div class="h-24 bg-gray-50 rounded-lg"></div>
+            <div class="h-24 bg-gray-50 rounded-lg"></div>
           </div>
-          <div class="h-32 bg-slate-900/40 rounded-lg"></div>
+          <div class="h-32 bg-gray-50 rounded-lg"></div>
         </div>
       </div>
 
       <!-- Error State -->
       <div v-else-if="error" class="mt-16 text-center">
-        <div class="bg-red-950/40 border border-red-800/40 rounded-lg p-6 inline-block">
-          <p class="text-red-400 text-sm">{{ error }}</p>
-          <button @click="loadReport" class="mt-3 text-xs text-slate-400 hover:text-slate-200 underline">Retry</button>
+        <div class="bg-red-50 border border-red-200 rounded-lg p-6 inline-block">
+          <p class="text-red-600 text-sm">{{ error }}</p>
+          <button @click="loadReport" class="mt-3 text-xs text-slate-500 hover:text-slate-800 underline">Retry</button>
         </div>
       </div>
 
@@ -33,7 +33,7 @@
       <div v-else-if="report && isOldFormat" class="mt-8 space-y-10">
         <div>
           <h1 class="text-3xl font-bold mb-2">{{ report.title || report.world_name || 'Simulation Report' }}</h1>
-          <p class="text-slate-400">{{ (report.rules || []).join(' · ') }}</p>
+          <p class="text-slate-500">{{ (report.rules || []).join(' · ') }}</p>
           <div class="flex gap-4 text-sm text-slate-500 mt-2">
             <span>{{ report.agent_count }} citizens</span>
             <span>{{ report.total_days }} days</span>
@@ -42,16 +42,16 @@
         </div>
         <div>
           <h2 class="text-xl font-semibold mb-3">What Happened</h2>
-          <p class="text-slate-300 leading-relaxed">{{ report.summary }}</p>
+          <p class="text-slate-700 leading-relaxed">{{ report.summary }}</p>
         </div>
         <div v-if="report.key_moments?.length">
           <h2 class="text-xl font-semibold mb-3">Key Moments</h2>
-          <div class="border-l-2 border-slate-700 pl-4 space-y-4">
+          <div class="border-l-2 border-gray-300 pl-4 space-y-4">
             <div v-for="m in report.key_moments" :key="m.day" class="relative">
               <div class="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
-              <div class="text-xs text-emerald-400 font-medium">Day {{ m.day }}</div>
+              <div class="text-xs text-emerald-600 font-medium">Day {{ m.day }}</div>
               <div class="font-medium">{{ m.title }}</div>
-              <p class="text-sm text-slate-400">{{ m.description }}</p>
+              <p class="text-sm text-slate-500">{{ m.description }}</p>
             </div>
           </div>
         </div>
@@ -68,9 +68,9 @@
         <div :class="['rounded-xl p-6 border relative overflow-hidden', verdictStyles[brief.verdict] || verdictStyles.caution]">
           <!-- Verdict icon -->
           <div class="absolute top-4 right-4 opacity-10">
-            <svg v-if="brief.verdict === 'go'" class="w-24 h-24 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <svg v-else-if="brief.verdict === 'rethink'" class="w-24 h-24 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <svg v-else class="w-24 h-24 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+            <svg v-if="brief.verdict === 'go'" class="w-24 h-24 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg v-else-if="brief.verdict === 'rethink'" class="w-24 h-24 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <svg v-else class="w-24 h-24 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
           </div>
 
           <div class="relative">
@@ -78,20 +78,20 @@
               <div>
                 <div class="flex items-center gap-2 mb-1">
                   <span :class="['text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md',
-                    brief.verdict === 'go' ? 'bg-emerald-500/20 text-emerald-400' :
-                    brief.verdict === 'rethink' ? 'bg-red-500/20 text-red-400' :
-                    'bg-amber-500/20 text-amber-400']">
+                    brief.verdict === 'go' ? 'bg-emerald-100 text-emerald-600' :
+                    brief.verdict === 'rethink' ? 'bg-red-100 text-red-600' :
+                    'bg-amber-100 text-amber-600']">
                     {{ brief.verdict === 'go' ? 'Proceed' : brief.verdict === 'rethink' ? 'Rethink' : 'Caution' }}
                   </span>
-                  <span class="text-xs text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded">
+                  <span class="text-xs text-slate-500 bg-gray-100 px-2 py-0.5 rounded">
                     {{ brief.confidence || 'medium' }} confidence
                   </span>
                 </div>
                 <h1 class="text-2xl font-bold">{{ brief.headline || meta.world_name || 'Analysis Complete' }}</h1>
               </div>
             </div>
-            <p class="text-slate-300 leading-relaxed">{{ brief.summary }}</p>
-            <div class="flex gap-4 text-sm text-slate-500 mt-4 pt-3 border-t border-slate-800/40">
+            <p class="text-slate-700 leading-relaxed">{{ brief.summary }}</p>
+            <div class="flex gap-4 text-sm text-slate-500 mt-4 pt-3 border-t border-gray-200">
               <span>{{ meta.agent_count }} agents</span>
               <span>{{ meta.total_days }} days</span>
               <span>{{ meta.total_actions?.toLocaleString() }} actions</span>
@@ -116,18 +116,18 @@
           <h2 class="section-title">Segment Deep-Dive</h2>
           <div class="space-y-4">
             <div v-for="seg in report.segments" :key="seg.name"
-              class="bg-slate-900/60 border border-slate-800/40 rounded-lg p-5">
+              class="bg-white border border-gray-200 rounded-lg p-5">
               <div class="flex items-center justify-between mb-3">
                 <h3 class="font-semibold">{{ seg.name }}</h3>
                 <span :class="['text-sm font-mono px-2 py-0.5 rounded',
-                  seg.adoption_pct >= 60 ? 'bg-emerald-900/50 text-emerald-400' :
-                  seg.adoption_pct >= 30 ? 'bg-amber-900/50 text-amber-400' :
-                  'bg-red-900/50 text-red-400']">
+                  seg.adoption_pct >= 60 ? 'bg-emerald-100 text-emerald-600' :
+                  seg.adoption_pct >= 30 ? 'bg-amber-100 text-amber-600' :
+                  'bg-red-100 text-red-600']">
                   {{ seg.adoption_pct }}% adoption
                 </span>
               </div>
               <div v-if="seg.funnel" class="mb-3">
-                <div class="flex gap-1 h-5 rounded overflow-hidden bg-slate-800/40">
+                <div class="flex gap-1 h-5 rounded overflow-hidden bg-gray-100">
                   <div v-for="stage in funnelStages" :key="stage.key"
                     :class="['h-full transition-all', stage.color]"
                     :style="{ width: funnelWidth(seg.funnel, stage.key) + '%' }"
@@ -141,17 +141,17 @@
                   </span>
                 </div>
               </div>
-              <p v-if="seg.reaction" class="text-sm text-slate-400 leading-relaxed">{{ seg.reaction }}</p>
+              <p v-if="seg.reaction" class="text-sm text-slate-500 leading-relaxed">{{ seg.reaction }}</p>
               <div v-if="seg.top_objection" class="mt-2 text-sm">
-                <span class="text-red-400 text-xs font-medium">Top objection: </span>
-                <span class="text-slate-400">{{ seg.top_objection }}</span>
+                <span class="text-red-600 text-xs font-medium">Top objection: </span>
+                <span class="text-slate-500">{{ seg.top_objection }}</span>
               </div>
               <div v-if="seg.champion?.name" class="mt-2 text-sm">
-                <span class="text-emerald-400 text-xs font-medium">Champion: </span>
-                <span class="text-slate-400">{{ seg.champion.name }} — {{ seg.champion.why }}</span>
+                <span class="text-emerald-600 text-xs font-medium">Champion: </span>
+                <span class="text-slate-500">{{ seg.champion.name }} — {{ seg.champion.why }}</span>
               </div>
               <p v-if="seg.representative_quote"
-                class="mt-2 text-sm text-slate-500 italic border-l-2 border-slate-700 pl-3">
+                class="mt-2 text-sm text-slate-500 italic border-l-2 border-emerald-200 pl-3">
                 "{{ seg.representative_quote }}"
               </p>
             </div>
@@ -163,25 +163,25 @@
           <h2 class="section-title">Action Items</h2>
           <div class="space-y-3">
             <div v-for="(item, idx) in report.action_items" :key="idx"
-              class="bg-slate-900/60 border border-slate-800/40 rounded-lg p-4 flex gap-4 hover:bg-slate-900/80 transition-colors">
+              class="bg-white border border-gray-200 rounded-lg p-4 flex gap-4 hover:bg-gray-50 transition-colors">
               <div :class="['shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold',
-                item.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                item.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                'bg-slate-700/50 text-slate-400']">
+                item.priority === 'high' ? 'bg-red-100 text-red-600' :
+                item.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
+                'bg-gray-200 text-slate-500']">
                 {{ idx + 1 }}
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
                   <span class="font-medium text-sm">{{ item.action }}</span>
                   <span :class="['text-[10px] uppercase px-1.5 py-0.5 rounded font-semibold',
-                    item.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                    item.priority === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                    'bg-slate-700/50 text-slate-400']">
+                    item.priority === 'high' ? 'bg-red-100 text-red-600' :
+                    item.priority === 'medium' ? 'bg-amber-100 text-amber-600' :
+                    'bg-gray-200 text-slate-500']">
                     {{ item.priority }}
                   </span>
                 </div>
                 <p v-if="item.reasoning" class="text-xs text-slate-500 leading-relaxed">{{ item.reasoning }}</p>
-                <p v-if="item.expected_impact" class="text-xs text-emerald-500/80 mt-1">Expected: {{ item.expected_impact }}</p>
+                <p v-if="item.expected_impact" class="text-xs text-emerald-600/80 mt-1">Expected: {{ item.expected_impact }}</p>
               </div>
             </div>
           </div>
@@ -193,14 +193,14 @@
             <h2 class="section-title">Risks</h2>
             <div class="space-y-2">
               <div v-for="(risk, idx) in report.risks" :key="idx"
-                class="flex items-start gap-3 bg-slate-900/60 border border-slate-800/40 rounded-lg p-3 hover:bg-slate-900/80 transition-colors">
+                class="flex items-start gap-3 bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
                 <span :class="['text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded shrink-0 mt-0.5',
-                  risk.severity === 'high' ? 'bg-red-500/20 text-red-400' :
-                  risk.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                  'bg-slate-700/50 text-slate-400']">
+                  risk.severity === 'high' ? 'bg-red-100 text-red-600' :
+                  risk.severity === 'medium' ? 'bg-amber-100 text-amber-600' :
+                  'bg-gray-200 text-slate-500']">
                   {{ risk.severity }}
                 </span>
-                <span class="text-sm text-slate-300">{{ risk.risk }}</span>
+                <span class="text-sm text-slate-700">{{ risk.risk }}</span>
               </div>
             </div>
           </div>
@@ -208,8 +208,8 @@
             <h2 class="section-title">Second-Order Effects</h2>
             <ul class="space-y-2">
               <li v-for="(effect, i) in report.second_order_effects" :key="i" class="flex gap-2 text-sm">
-                <span class="text-blue-400 shrink-0">↪</span>
-                <span class="text-slate-400">{{ effect }}</span>
+                <span class="text-blue-600 shrink-0">↪</span>
+                <span class="text-slate-500">{{ effect }}</span>
               </li>
             </ul>
           </div>
@@ -218,32 +218,33 @@
         <!-- 7. Evidence Trail -->
         <div v-if="report.narrative || report.metrics_history?.length > 1">
           <button @click="showEvidence = !showEvidence"
-            class="flex items-center gap-2 text-xl font-semibold mb-4 hover:text-emerald-400 transition-colors">
-            <span :class="['text-sm transition-transform duration-200', showEvidence ? 'rotate-90' : '']">▶</span>
+            class="flex items-center gap-2 text-lg font-semibold mb-4 hover:text-emerald-600 transition-colors group">
+            <span :class="['text-xs transition-transform duration-200 text-slate-400 group-hover:text-emerald-600', showEvidence ? 'rotate-90' : '']">▶</span>
             Evidence Trail
+            <span class="text-xs text-slate-400 font-normal ml-1">{{ showEvidence ? 'Hide' : 'Show' }}</span>
           </button>
           <Transition name="collapse">
             <div v-if="showEvidence" class="space-y-6">
               <div v-if="report.narrative?.summary">
-                <h3 class="text-sm font-medium text-slate-400 mb-2">Narrative Summary</h3>
-                <p class="text-sm text-slate-300 leading-relaxed">{{ report.narrative.summary }}</p>
+                <h3 class="text-sm font-medium text-slate-500 mb-2">Narrative Summary</h3>
+                <p class="text-sm text-slate-700 leading-relaxed">{{ report.narrative.summary }}</p>
               </div>
               <div v-if="report.narrative?.key_moments?.length">
-                <h3 class="text-sm font-medium text-slate-400 mb-2">Key Moments</h3>
-                <div class="border-l-2 border-slate-700 pl-4 space-y-3">
+                <h3 class="text-sm font-medium text-slate-500 mb-2">Key Moments</h3>
+                <div class="border-l-2 border-gray-200 pl-4 space-y-3">
                   <div v-for="m in report.narrative.key_moments" :key="m.day" class="relative">
                     <div class="absolute -left-[1.35rem] top-1 w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
-                    <div class="text-xs text-emerald-400 font-medium">Day {{ m.day }}</div>
+                    <div class="text-xs text-emerald-600 font-medium">Day {{ m.day }}</div>
                     <div class="text-sm font-medium">{{ m.title }}</div>
-                    <p class="text-xs text-slate-400">{{ m.description }}</p>
+                    <p class="text-xs text-slate-500">{{ m.description }}</p>
                   </div>
                 </div>
               </div>
               <div v-if="report.metrics_history?.length > 1">
-                <h3 class="text-sm font-medium text-slate-400 mb-2">Metrics Trajectory</h3>
+                <h3 class="text-sm font-medium text-slate-500 mb-2">Metrics Trajectory</h3>
                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div v-for="metric in displayMetrics" :key="metric.key"
-                    class="bg-slate-900/60 border border-slate-800/40 rounded-lg p-3">
+                    class="bg-white border border-gray-200 rounded-lg p-3">
                     <div class="text-xs text-slate-500 mb-1">{{ metric.label }}</div>
                     <div class="flex items-end gap-[2px] h-8">
                       <div v-for="(val, i) in metric.values" :key="i"
@@ -251,7 +252,7 @@
                         :style="{ height: (val * 100) + '%', opacity: 0.4 + (i / metric.values.length) * 0.6 }">
                       </div>
                     </div>
-                    <div class="flex justify-between text-[10px] text-slate-600 mt-1">
+                    <div class="flex justify-between text-[10px] text-slate-400 mt-1">
                       <span>{{ metric.values[0]?.toFixed(2) }}</span>
                       <span>{{ metric.values[metric.values.length - 1]?.toFixed(2) }}</span>
                     </div>
@@ -263,20 +264,23 @@
         </div>
 
         <!-- 8. Fork CTA -->
-        <div class="bg-slate-900/60 border border-slate-800/40 rounded-xl p-6 text-center">
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/60 rounded-xl p-8 text-center">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+          </div>
           <h3 class="font-semibold text-lg mb-1">Explore alternate timelines</h3>
-          <p class="text-sm text-slate-400 mb-4">Fork this simulation to test different scenarios from the same starting point.</p>
+          <p class="text-sm text-slate-500 mb-5">Fork this simulation to test different scenarios from the same starting point.</p>
           <router-link
             :to="`/simulation/${route.params.id}`"
-            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors active:scale-[0.97]"
+            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors active:scale-[0.97] shadow-sm"
           >
-            Fork from this simulation
+            Fork from this simulation →
           </router-link>
         </div>
 
         <!-- 9. Footer Actions -->
-        <div class="flex flex-wrap gap-3 pt-4 border-t border-slate-800/40">
-          <router-link to="/" class="btn-secondary">Run Again</router-link>
+        <div class="flex flex-wrap gap-3 pt-4 border-t border-gray-200">
+          <router-link to="/" class="btn-primary text-sm">Run Again</router-link>
           <button @click="copyLink" class="btn-secondary">{{ copied ? 'Copied!' : 'Share Link' }}</button>
           <button @click="doPublish" :disabled="published" class="btn-secondary">
             {{ published ? 'Published' : 'Publish to Gallery' }}
@@ -309,9 +313,9 @@ const published = ref(false)
 const showEvidence = ref(false)
 
 const verdictStyles = {
-  go: 'bg-emerald-950/40 border-emerald-800/40',
-  caution: 'bg-amber-950/40 border-amber-800/40',
-  rethink: 'bg-red-950/40 border-red-800/40',
+  go: 'bg-emerald-50 border-emerald-200',
+  caution: 'bg-amber-50 border-amber-200',
+  rethink: 'bg-red-50 border-red-200',
 }
 
 const funnelStages = [
@@ -382,25 +386,8 @@ function copyLink() {
 
 function downloadPdf() {
   const title = brief.value?.headline || meta.value?.world_name || 'Simulation Report'
-  const style = document.createElement('style')
-  style.textContent = `
-    @media print {
-      body * { visibility: hidden; }
-      .max-w-4xl, .max-w-4xl * { visibility: visible; }
-      .max-w-4xl { position: absolute; left: 0; top: 0; width: 100%; max-width: 100%; padding: 20px; }
-      .btn-secondary, .btn-secondary *, nav, nav * { display: none !important; }
-      @page { margin: 1cm; size: A4; }
-      .bg-slate-950 { background: white !important; color: black !important; }
-      .text-slate-200, .text-slate-300, .text-slate-400 { color: #333 !important; }
-      .text-slate-500, .text-slate-600 { color: #666 !important; }
-      .border-slate-800\\/40 { border-color: #ddd !important; }
-      .bg-slate-900\\/60 { background: #f5f5f5 !important; }
-    }
-  `
-  document.head.appendChild(style)
   document.title = title
   window.print()
-  document.head.removeChild(style)
   document.title = 'MiroSociety'
 }
 
