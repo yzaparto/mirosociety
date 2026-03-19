@@ -50,5 +50,36 @@ async def interview(sim_id: str, agent_id: int, req: InterviewRequest, request: 
         "Keep it to 2-3 sentences."
     )
 
+    if agent.life_state:
+        life_lines = []
+
+        # Domain levels
+        for domain in ["finances", "career", "health"]:
+            val = getattr(agent.life_state, domain, 0.5)
+            if val < 0.3:
+                life_lines.append(f"Your {domain} situation is dire")
+            elif val < 0.5:
+                life_lines.append(f"Your {domain} is tight but you manage")
+            elif val > 0.7:
+                life_lines.append(f"Your {domain} is in good shape")
+
+        # Family
+        if agent.life_state.family:
+            family_strs = [f"{f.name} ({f.relation}, {f.age}, {f.status})" for f in agent.life_state.family]
+            life_lines.append(f"Your family: {', '.join(family_strs)}")
+
+        # Pressures
+        if agent.life_state.pressures:
+            pressure_strs = [p.description for p in agent.life_state.pressures[:3]]
+            life_lines.append(f"What weighs on you: {'; '.join(pressure_strs)}")
+
+        # Childhood
+        if agent.life_state.childhood_summary:
+            life_lines.append(f"Your upbringing: {agent.life_state.childhood_summary[:200]}")
+
+        if life_lines:
+            system += "\n\nYOUR LIFE SITUATION:\n" + "\n".join(life_lines)
+            system += "\n\nWhen answering, let your life situation color your responses naturally. Reference family, pressures, or your past when relevant."
+
     response = await llm.generate(system=system, user=req.question, max_tokens=200)
     return {"response": response, "emotional_state": agent.emotional_state}
