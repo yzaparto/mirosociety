@@ -8,10 +8,11 @@ const api = axios.create({
 })
 
 export default {
-  async simulate(rules, population = 25, durationDays = 365, proposedChange = null, segments = null) {
+  async simulate(rules, population = 25, durationDays = 365, proposedChange = null, segments = null, city = null) {
     const payload = { rules, population, duration_days: durationDays }
     if (proposedChange) payload.proposed_change = proposedChange
     if (segments && segments.length > 0) payload.segments = segments
+    if (city) payload.city = city
     const { data } = await api.post('/simulate', payload)
     return data
   },

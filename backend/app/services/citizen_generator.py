@@ -7,6 +7,7 @@ from app.models.agent import (
     AgentPersona, Personality, SocialEdge, COMMUNICATION_STYLES,
     LifeState, FamilyMember, FormativeEvent, LifePressure,
 )
+from app.models.demographics import DemographicProfile
 from app.models.world import WorldBlueprint
 from app.services.llm import LLMClient, parse_json
 
@@ -73,6 +74,53 @@ Roles for market worlds are things like:
 - "Reddit power user, r/teslamotors moderator"
 - "Rivian reservation holder"
 """
+
+DEMOGRAPHIC_CAST_PROMPT = """You are a character designer for MiroSociety, an AI society simulation.
+
+You are generating citizens for a simulation set in a REAL CITY. Use the demographic data below to create a cast that PROPORTIONALLY mirrors the city's actual population.
+
+CITY DEMOGRAPHICS:
+- City: {city_name}, {state}
+- Population: {population:,}
+- Median household income: ${median_income:,}
+- Poverty rate: {poverty_rate:.1f}%
+- Unemployment rate: {unemployment_rate:.1f}%
+- Median age: {median_age:.1f}
+
+AGE DISTRIBUTION:
+{age_dist}
+
+OCCUPATION BREAKDOWN:
+{occ_dist}
+
+ETHNIC COMPOSITION:
+{eth_dist}
+
+{city_character}
+
+INSTRUCTIONS:
+- Match the age distribution proportionally. If 30% of the city is 25-34, roughly 30% of citizens should be in that range.
+- Match the ethnic composition proportionally using culturally appropriate names.
+- Match the occupation breakdown — if 40% are management/business, assign ~40% of citizens to white-collar roles.
+- Income levels should reflect the median income and poverty rate — include both struggling and comfortable citizens.
+- Each citizen still needs a distinct personality, a clear stance on the society's tensions, and a memorable hook.
+
+Return a JSON array of citizen summaries:
+[
+  {{
+    "name": "Full Name",
+    "role": "Occupation/Role",
+    "age": 34,
+    "personality_hook": "One sentence that captures who this person is",
+    "stance": "Their position on the society's key tensions",
+    "communication_style": "one of: terse, sarcastic, verbose, question-asker, anecdote-teller, data-driven, emotional, passive-aggressive"
+  }}
+]
+
+CRITICAL: Assign DIVERSE communication styles across the cast.
+CRITICAL: Citizens must have DIVERSE stances on the society's rules — true believers, pragmatists, quiet dissenters, active resisters, exploiters, and the indifferent.
+
+Return ONLY valid JSON array. No markdown, no explanation."""
 
 PERSONA_SYSTEM_PROMPT = """You are a character psychologist for MiroSociety, an AI society simulation.
 
@@ -204,8 +252,9 @@ class CitizenGenerator:
         on_citizen: Callable[[AgentPersona], Awaitable[None]] | None = None,
         proposed_change: str | None = None,
         segments: list[dict] | None = None,
+        demographics: DemographicProfile | None = None,
     ) -> list[AgentPersona]:
-        cast = await self._generate_cast(blueprint, count, proposed_change, segments)
+        cast = await self._generate_cast(blueprint, count, proposed_change, segments, demographics)
         agents = await self._generate_personas(blueprint, cast, on_citizen)
         await self._generate_life_histories(blueprint, agents)
         self._apply_all_trait_modifiers(agents)
@@ -235,6 +284,7 @@ class CitizenGenerator:
         count: int,
         proposed_change: str | None = None,
         segments: list[dict] | None = None,
+        demographics: DemographicProfile | None = None,
     ) -> list[dict]:
         world_context = (
             f"World: {blueprint.name}\n"
@@ -243,6 +293,34 @@ class CitizenGenerator:
             f"Resources: {', '.join(blueprint.resources)}\n"
             f"Tensions: {'; '.join(blueprint.initial_tensions)}"
         )
+
+        if demographics:
+            age_dist = "\n".join(
+                f"  - {a.bracket}: {a.percentage:.1f}%" for a in demographics.age
+            ) or "  (not available)"
+            occ_dist = "\n".join(
+                f"  - {o.category}: {o.percentage:.1f}%" for o in demographics.occupations
+            ) or "  (not available)"
+            eth_dist = "\n".join(
+                f"  - {e.group}: {e.percentage:.1f}%" for e in demographics.ethnicity
+            ) or "  (not available)"
+            char_line = f"CITY CHARACTER: {demographics.city_character}" if demographics.city_character else ""
+
+            system_prompt = DEMOGRAPHIC_CAST_PROMPT.format(
+                city_name=demographics.city_name,
+                state=demographics.state,
+                population=demographics.population,
+                median_income=demographics.median_household_income,
+                poverty_rate=demographics.poverty_rate,
+                unemployment_rate=demographics.unemployment_rate,
+                median_age=demographics.median_age,
+                age_dist=age_dist,
+                occ_dist=occ_dist,
+                eth_dist=eth_dist,
+                city_character=char_line,
+            )
+        else:
+            system_prompt = CAST_SYSTEM_PROMPT
 
         user_text = f"{world_context}\n\nGenerate exactly {count} citizens."
         if proposed_change:
@@ -255,7 +333,7 @@ class CitizenGenerator:
             user_text += f"\n\nTARGET SEGMENTS (distribute citizens across these):\n{seg_text}"
 
         response = await self.llm.generate(
-            system=CAST_SYSTEM_PROMPT,
+            system=system_prompt,
             user=user_text,
             json_mode=True,
             max_tokens=3000,

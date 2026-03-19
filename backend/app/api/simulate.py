@@ -11,6 +11,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.models.simulation import SSEEvent, SimulationStatus, SpeedMode, ForkRequest
 from app.models.world import WorldState, WorldMetrics
+from app.models.demographics import DemographicProfile
+from app.services.census import CensusService
 
 from enum import Enum
 
@@ -38,6 +40,7 @@ class SimulateRequest(BaseModel):
     duration_days: int = 365
     proposed_change: str | None = None
     segments: list[SegmentInput] | None = None
+    city: str | None = None
 
     @field_validator("rules")
     @classmethod
@@ -109,6 +112,25 @@ async def simulate(req: SimulateRequest, request: Request):
                 await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
                 return
 
+            demographics: DemographicProfile | None = None
+            if req.city:
+                try:
+                    census = CensusService(request.app.state.llm)
+                    if "," in req.city:
+                        city_name, state = [p.strip() for p in req.city.split(",", 1)]
+                    else:
+                        city_name, state = req.city.strip(), None
+                    demographics = await census.get_profile(city_name, state)
+                    await event_queue.put(SSEEvent(type="demographics_loaded", data={
+                        "city": demographics.city_name,
+                        "state": demographics.state,
+                        "population": demographics.population,
+                        "median_income": demographics.median_household_income,
+                        "poverty_rate": demographics.poverty_rate,
+                    }))
+                except Exception as e:
+                    logger.warning("Demographics fetch failed for %s: %s", req.city, e)
+
             await event_queue.put(SSEEvent(type="status", data={"status": "generating_citizens"}))
             await store.update_status(sim_id, SimulationStatus.GENERATING_CITIZENS.value)
 
@@ -123,7 +145,12 @@ async def simulate(req: SimulateRequest, request: Request):
                 blueprint, req.population, on_citizen=on_citizen,
                 proposed_change=req.proposed_change,
                 segments=segments_dicts,
+                demographics=demographics,
             )
+
+            for agent in agents:
+                await store.save_agent(sim_id, agent)
+                await event_queue.put(SSEEvent(type="citizen_generated", data=agent.model_dump()))
 
             if sim_id in cancelled:
                 await event_queue.put(SSEEvent(type="cancelled", data={"message": "Simulation cancelled"}))
