@@ -1424,7 +1424,7 @@ onMounted(() => {
 
   es.addEventListener('demographics_loaded', (e) => {
     const d = JSON.parse(e.data)
-    console.log('Demographics loaded:', d)
+    demographics.value = d
   })
 
   es.addEventListener('simulation_complete', () => {
