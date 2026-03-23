@@ -17,6 +17,8 @@ from app.services.research import ResearchService
 from app.services.gossip import GossipEngine
 from app.services.life_context import build_life_prompt_block, compute_action_bias
 from app.services.life_engine import LifeEngine
+from app.services.forecast import ForecastService
+from app.services.sim_logger import SimulationLogger
 from app.constants import TIMES_OF_DAY
 
 logger = logging.getLogger(__name__)
@@ -297,6 +299,7 @@ class SimulationEngine:
         research: ResearchService | None = None,
         gossip: GossipEngine | None = None,
         life_engine: LifeEngine | None = None,
+        forecast: ForecastService | None = None,
     ):
         self.llm = llm
         self.store = store
@@ -306,6 +309,7 @@ class SimulationEngine:
         self.research = research
         self.gossip = gossip or GossipEngine()
         self.life_engine = life_engine
+        self.forecast = forecast
         self._running: dict[str, bool] = {}
         self._paused: dict[str, asyncio.Event] = {}
         self._speed: dict[str, SpeedMode] = {}
@@ -313,6 +317,7 @@ class SimulationEngine:
         self._last_narrative: dict[str, str] = {}
         self._enriched_agents: dict[str, list[AgentPersona]] = {}
         self._enrichment_ready: dict[str, asyncio.Event] = {}
+        self._last_active_round: dict[str, dict[int, int]] = {}
 
     async def _wait_if_paused(self, simulation_id: str) -> bool:
         """Block while paused. Returns False if the simulation was stopped."""
@@ -365,6 +370,10 @@ class SimulationEngine:
         self._last_narrative[simulation_id] = ""
         self._enrichment_ready[simulation_id] = asyncio.Event()
         self.gossip.init_simulation(simulation_id)
+        if self.forecast:
+            self.forecast.init_simulation(simulation_id)
+
+        sim_log = SimulationLogger(simulation_id)
 
         total_rounds = world_state.blueprint.time_config.total_days * world_state.blueprint.time_config.rounds_per_day
         round_num = start_round
@@ -389,13 +398,13 @@ class SimulationEngine:
                 )) if round_num > 1 else 0
 
                 world_state, agents, tension_event = await self.tension.check_and_apply(
-                    world_state, agents, sig_count, sim_id=simulation_id
+                    world_state, agents, sig_count, sim_id=simulation_id, forecast=self.forecast
                 )
 
                 if not await self._wait_if_paused(simulation_id):
                     break
 
-                active = self._select_active_agents(world_state, agents, round_num, tension_event is not None)
+                active = self._select_active_agents(world_state, agents, round_num, tension_event is not None, simulation_id)
 
                 life_events_this_round = []
                 if self.life_engine:
@@ -408,13 +417,15 @@ class SimulationEngine:
                     except Exception as life_err:
                         logger.warning("LifeEngine failed for round %d: %s", round_num, life_err)
 
-                decisions = await self._batch_decisions(active, world_state, agents)
+                decisions = await self._batch_decisions(active, world_state, agents, simulation_id)
 
                 if not await self._wait_if_paused(simulation_id):
                     break
 
+                if self.forecast:
+                    setattr(self.forecast, "_current_sim_id", simulation_id)
                 resolved_entries, world_state, agents = self.resolver.resolve(
-                    decisions, world_state, agents, round_num
+                    decisions, world_state, agents, round_num, forecast=self.forecast
                 )
 
                 if self.research:
@@ -448,6 +459,12 @@ class SimulationEngine:
                     break
 
                 self._total_actions[simulation_id] += len(resolved_entries)
+
+                if simulation_id not in self._last_active_round:
+                    self._last_active_round[simulation_id] = {}
+                for entry in resolved_entries:
+                    if entry.action_type != ActionType.DO_NOTHING:
+                        self._last_active_round[simulation_id][entry.agent_id] = round_num
 
                 narrative = ""
                 try:
@@ -511,6 +528,74 @@ class SimulationEngine:
                 await self.store.save_agents_batch(simulation_id, agents)
                 await self.store.save_actions_batch(simulation_id, resolved_entries)
                 await self.store.save_metrics(simulation_id, round_num, world_state.metrics)
+
+                if self.forecast and self.forecast.available:
+                    mh = await self.store.get_metrics_history(simulation_id)
+                    agent_actions = {e.agent_id: e.action_type.name for e in resolved_entries}
+                    self.forecast.update(simulation_id, mh, agent_actions)
+
+                    if round_num % 5 == 0 and round_num >= 10:
+                        try:
+                            anomalies = self.forecast.check_anomalies(simulation_id)
+                            for anomaly in anomalies:
+                                await emit(SSEEvent(type="anomaly_detected", data=anomaly))
+                        except Exception as anom_err:
+                            logger.debug("Anomaly check failed: %s", anom_err)
+
+                    if round_num % 2 == 0 and round_num >= 3:
+                        try:
+                            coherence_scores = self.forecast.score_agent_coherence(simulation_id, agents)
+                            flagged = [
+                                (aid, cs) for aid, cs in coherence_scores.items()
+                                if cs.score < 0.5
+                            ]
+                            for aid, cs in flagged:
+                                agent_obj = next((a for a in agents if a.id == aid), None)
+                                await emit(SSEEvent(type="coherence_warning", data={
+                                    "agent_id": aid,
+                                    "agent_name": agent_obj.name if agent_obj else f"Agent {aid}",
+                                    "score": round(cs.score, 2),
+                                    "contradictions": cs.contradictions,
+                                }))
+                        except Exception as coh_err:
+                            logger.debug("Coherence scoring failed: %s", coh_err)
+
+                    if round_num == 30 or (round_num > 30 and round_num % 30 == 0):
+                        try:
+                            self.forecast.discover_causality(simulation_id)
+                        except Exception:
+                            pass
+
+                try:
+                    coh = None
+                    if self.forecast and hasattr(self.forecast, '_state'):
+                        st = self.forecast._state(simulation_id)
+                        coh = st.coherence_scores if st.coherence_scores else None
+
+                    mandates_map: dict[int, str] = {}
+                    cross_rep_str = ""
+                    if is_market_sim:
+                        for a in agents:
+                            m_str = self._build_personality_mandate(a, agents)
+                            if m_str:
+                                mandates_map[a.id] = m_str
+                        sample_agent = agents[0] if agents else None
+                        if sample_agent:
+                            cross_rep_str = self._detect_cross_agent_repetition(sample_agent, agents)
+
+                    sim_log.log_round(
+                        round_num=round_num,
+                        day=world_state.day,
+                        time_of_day=TIMES_OF_DAY[world_state.round_in_day % 3],
+                        agents=agents,
+                        entries=resolved_entries,
+                        metrics=world_state.metrics,
+                        coherence_scores=coh,
+                        personality_mandates=mandates_map,
+                        cross_agent_repeated=cross_rep_str,
+                    )
+                except Exception as log_err:
+                    logger.debug("SimulationLogger failed: %s", log_err)
 
                 significance = self._count_significant(resolved_entries)
 
@@ -580,6 +665,7 @@ class SimulationEngine:
             if self._total_actions.get(simulation_id, 0) > 0:
                 asyncio.create_task(self._generate_report_background(simulation_id))
         finally:
+            sim_log.close()
             self._running.pop(simulation_id, None)
             self._paused.pop(simulation_id, None)
             self._speed.pop(simulation_id, None)
@@ -587,8 +673,11 @@ class SimulationEngine:
             self._last_narrative.pop(simulation_id, None)
             self._enriched_agents.pop(simulation_id, None)
             self._enrichment_ready.pop(simulation_id, None)
+            self._last_active_round.pop(simulation_id, None)
             self.tension.cleanup(simulation_id)
             self.gossip.cleanup(simulation_id)
+            if self.forecast:
+                self.forecast.cleanup(simulation_id)
 
     def _select_active_agents(
         self,
@@ -596,6 +685,7 @@ class SimulationEngine:
         agents: list[AgentPersona],
         round_num: int,
         event_occurred: bool,
+        simulation_id: str = "",
     ) -> list[AgentPersona]:
         tc = world_state.blueprint.time_config
         base_min = tc.active_agents_per_round_min
@@ -604,10 +694,14 @@ class SimulationEngine:
 
         bridge_node_ids = set(TensionEngine.find_bridge_nodes(agents))
 
+        last_active = self._last_active_round.get(simulation_id, {})
+
         weights: dict[int, float] = {}
         has_open_proposals = any(p.status == "open" for p in world_state.proposals)
 
         is_market = self._is_market_simulation(world_state)
+
+        dormancy_cap = max(3, len(agents) // 8)
 
         for a in agents:
             w = 0.3 + a.personality.ambition * 0.2
@@ -629,6 +723,11 @@ class SimulationEngine:
                     w += 0.1
                 if a.personality.social_proof > 0.7 and world_state.metrics.word_of_mouth > 0.3:
                     w += 0.15
+
+            rounds_dormant = round_num - last_active.get(a.id, 0)
+            if rounds_dormant >= 2:
+                dormancy_boost = min(0.4, 0.1 * min(rounds_dormant, dormancy_cap))
+                w += dormancy_boost
 
             weights[a.id] = min(1.0, w)
 
@@ -655,10 +754,11 @@ class SimulationEngine:
         active_agents: list[AgentPersona],
         world_state: WorldState,
         all_agents: list[AgentPersona],
+        simulation_id: str = "",
     ) -> list[tuple[AgentPersona, AgentDecision]]:
         prompts = []
         for agent in active_agents:
-            prompt = self._build_decision_prompt(agent, world_state, all_agents)
+            prompt = self._build_decision_prompt(agent, world_state, all_agents, simulation_id)
             prompts.append(prompt)
 
         responses = await self.llm.generate_batch(prompts, json_mode=True, max_tokens=500)
@@ -760,32 +860,51 @@ class SimulationEngine:
         return warnings[0] if warnings else ""
 
     @staticmethod
+    def _extract_ngrams(text: str, n: int = 3) -> list[str]:
+        stop = {"the", "and", "but", "for", "are", "not", "you", "all",
+                "can", "had", "her", "was", "one", "our", "out", "has",
+                "that", "this", "with", "have", "from", "they", "been",
+                "said", "each", "she", "which", "their", "will", "way",
+                "about", "would", "been", "like", "just", "over", "such",
+                "it's", "i'm", "don't", "really", "think", "feel", "i've"}
+        words = [w for w in text.split() if len(w) > 2 and w not in stop]
+        return [" ".join(words[i:i + n]) for i in range(len(words) - n + 1)]
+
+    _TOPIC_VARIATION_HINTS = [
+        "share a specific personal story or anecdote",
+        "address a specific person by name and respond to their point",
+        "ask a question nobody has asked yet",
+        "bring up a concrete detail (a show, a feature, a number, a date)",
+        "talk about how this affects your daily routine or family",
+        "compare this to a completely different industry or experience",
+        "propose a specific action the group could take together",
+        "admit something you're uncertain or conflicted about",
+        "play devil's advocate against your own usual position",
+        "stay silent this round — absence is powerful",
+    ]
+
+    @staticmethod
     def _detect_content_repetition(mem_lower: list[str]) -> str:
-        """Detect semantic content loops — agents repeating the same talking point
-        across multiple rounds (e.g. Blockbuster analogy, family movie night, etc.)."""
         speech_memories = [m for m in mem_lower if "said" in m]
-        if len(speech_memories) < 3:
+        if len(speech_memories) < 2:
             return ""
 
-        phrase_counts: dict[str, int] = {}
-        key_phrases = [
-            "blockbuster", "family movie night", "loyal customer", "jumping ship",
-            "squeeze every penny", "corporate greed", "password sharing",
-            "price hike", "price increase", "ridiculous rules", "silly rules",
-            "flexible sharing", "quality content", "premium content",
-        ]
+        ngram_counts: dict[str, int] = {}
         for mem in speech_memories:
-            for phrase in key_phrases:
-                if phrase in mem:
-                    phrase_counts[phrase] = phrase_counts.get(phrase, 0) + 1
+            seen_in_mem: set[str] = set()
+            for ng in SimulationEngine._extract_ngrams(mem, 3):
+                if ng not in seen_in_mem:
+                    seen_in_mem.add(ng)
+                    ngram_counts[ng] = ngram_counts.get(ng, 0) + 1
 
-        repeated = [(p, c) for p, c in phrase_counts.items() if c >= 3]
+        repeated = [(ng, c) for ng, c in ngram_counts.items() if c >= 2]
         if repeated:
-            top_phrase, count = max(repeated, key=lambda x: x[1])
+            top_ng, count = max(repeated, key=lambda x: x[1])
+            hint = random.choice(SimulationEngine._TOPIC_VARIATION_HINTS)
             return (
-                f"\n🔁 CONTENT LOOP DETECTED: You've mentioned '{top_phrase}' {count} times. "
-                "STOP repeating yourself. Say something genuinely NEW, take a concrete action, "
-                "or stay silent. Repeating the same point makes you boring and unrealistic."
+                f"\nCONTENT LOOP DETECTED: You've used the phrase '{top_ng}' {count} times. "
+                "STOP repeating yourself. Instead, try this: " + hint + ". "
+                "If you have nothing new to add, choose DO_NOTHING or OBSERVE."
             )
 
         word_bags: list[set[str]] = []
@@ -793,20 +912,81 @@ class SimulationEngine:
             words = set(w for w in mem.split() if len(w) > 4)
             word_bags.append(words)
 
-        if len(word_bags) >= 3:
+        if len(word_bags) >= 2:
             overlaps = []
             for i in range(len(word_bags)):
                 for j in range(i + 1, len(word_bags)):
                     if word_bags[i] and word_bags[j]:
                         overlap = len(word_bags[i] & word_bags[j]) / min(len(word_bags[i]), len(word_bags[j]))
                         overlaps.append(overlap)
-            if overlaps and sum(overlaps) / len(overlaps) > 0.5:
+            if overlaps and sum(overlaps) / len(overlaps) > 0.4:
+                hint = random.choice(SimulationEngine._TOPIC_VARIATION_HINTS)
                 return (
-                    "\n🔁 You keep saying very similar things. Change the topic, take an action, "
-                    "or choose DO_NOTHING. Real people don't repeat themselves this much."
+                    "\nYou keep making the same point with slightly different words. "
+                    "Real people notice when they're repeating themselves and change tack. "
+                    "Try this instead: " + hint + ". "
+                    "Or choose DO_NOTHING — silence is more realistic than broken-record advocacy."
                 )
 
         return ""
+
+    _OPENER_PATTERNS = (
+        "has anyone else", "can you believe", "i can't believe",
+        "honestly i", "you know i", "can we talk about",
+        "i just can't", "it's really", "i feel like",
+        "let's not forget", "we need to", "i understand the",
+    )
+
+    @classmethod
+    def _detect_cross_agent_repetition(cls, agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
+        ngram_agents: dict[str, set[str]] = {}
+        opener_agents: dict[str, set[str]] = {}
+
+        for other in all_agents:
+            for mem in other.working_memory[-3:]:
+                lower = mem.lower()
+                if "said" not in lower:
+                    continue
+
+                for n_size in (2, 3):
+                    for ng in SimulationEngine._extract_ngrams(lower, n_size):
+                        if ng not in ngram_agents:
+                            ngram_agents[ng] = set()
+                        ngram_agents[ng].add(other.name)
+
+                for opener in cls._OPENER_PATTERNS:
+                    if opener in lower:
+                        opener_agents.setdefault(opener, set()).add(other.name)
+
+        min_agents = max(2, len(all_agents) // 10)
+
+        overused_ngrams = [
+            (ng, names) for ng, names in ngram_agents.items()
+            if len(names) >= min_agents
+        ]
+        overused_openers = [
+            (op, names) for op, names in opener_agents.items()
+            if len(names) >= min_agents
+        ]
+
+        if not overused_ngrams and not overused_openers:
+            return ""
+
+        examples: list[str] = []
+        overused_ngrams.sort(key=lambda x: len(x[1]), reverse=True)
+        for ng, names in overused_ngrams[:2]:
+            examples.append(f"'{ng}' (said by {len(names)} people)")
+        overused_openers.sort(key=lambda x: len(x[1]), reverse=True)
+        for op, names in overused_openers[:2]:
+            examples.append(f"opener '{op}...' (used by {len(names)} people)")
+
+        return (
+            "\nCROSS-COMMUNITY REPETITION: The following points/phrases have been made by "
+            "multiple people recently: " + "; ".join(examples[:4]) + ". "
+            "Say something DIFFERENT, offer a NEW angle, challenge the consensus, "
+            "or stay silent. Do NOT parrot what others already said. "
+            "Do NOT start your sentence with the same opener as everyone else."
+        )
 
     @staticmethod
     def _build_position_tracker(agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
@@ -910,6 +1090,84 @@ class SimulationEngine:
         return "\n".join(parts)
 
     @staticmethod
+    def _build_personality_mandate(agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
+        p = agent.personality
+        mandates: list[str] = []
+
+        defector_count = sum(1 for a in all_agents if a.id != agent.id and a.has_defected)
+        abandoner_count = sum(1 for a in all_agents if a.id != agent.id and a.abandoned_products)
+        total_others = len(all_agents) - 1
+        majority_stayed = (defector_count + abandoner_count) < (total_others / 2)
+
+        if p.brand_loyalty >= 0.7:
+            mandates.append(
+                "PERSONALITY MANDATE (BINDING): Your brand_loyalty is {bl:.1f}. "
+                "You DEFEND this brand. You CANNOT choose ABANDON or DEFECT. "
+                "Find reasons to stay. Push back against complainers. Argue that "
+                "the price is worth the content. You are the voice of loyalty."
+                .format(bl=p.brand_loyalty)
+            )
+        elif p.brand_loyalty >= 0.5:
+            mandates.append(
+                "PERSONALITY MANDATE: Your brand_loyalty is {bl:.1f}. "
+                "You grumble but are inclined to stay. COMPLY is your most "
+                "likely outcome unless you face severe personal financial pressure."
+                .format(bl=p.brand_loyalty)
+            )
+
+        if p.price_sensitivity <= 0.3:
+            mandates.append(
+                "PERSONALITY MANDATE: Your price_sensitivity is {ps:.1f}. "
+                "Price changes barely register for you. Do NOT cite pricing as "
+                "a reason for any negative action. You can afford this easily."
+                .format(ps=p.price_sensitivity)
+            )
+
+        if p.conformity >= 0.7 and majority_stayed:
+            mandates.append(
+                "PERSONALITY MANDATE: Your conformity is {c:.1f}. "
+                "You follow the MAJORITY. Most people ({stayed}/{total}) are still here. "
+                "You stay with the crowd. Only follow exits after a clear tipping point."
+                .format(c=p.conformity, stayed=total_others - defector_count - abandoner_count, total=total_others)
+            )
+
+        if p.social_proof >= 0.7 and (defector_count + abandoner_count) < 3:
+            mandates.append(
+                "PERSONALITY MANDATE: Your social_proof is {sp:.1f}. "
+                "Only {n} people have actually left. That is NOT enough to trigger "
+                "your herd instinct. You stay and observe until the exodus is real."
+                .format(sp=p.social_proof, n=defector_count + abandoner_count)
+            )
+
+        if p.novelty_seeking >= 0.7:
+            mandates.append(
+                "PERSONALITY MANDATE: Your novelty_seeking is {ns:.1f}. "
+                "You're excited to explore alternatives, but DON'T just pick whatever "
+                "everyone else chose. Suggest a DIFFERENT competitor or angle."
+                .format(ns=p.novelty_seeking)
+            )
+
+        return "\n".join(mandates) if mandates else ""
+
+    _NEG_SPEECH_KW = frozenset({
+        "cancel", "cancelled", "leaving", "done with", "can't justify",
+        "not worth", "ridiculous", "outrageous", "rip-off", "too expensive",
+        "switching", "goodbye", "had enough", "last straw", "fed up",
+        "unacceptable", "joke", "scam",
+    })
+
+    @classmethod
+    def _count_negative_speech_rounds(cls, agent: AgentPersona) -> int:
+        count = 0
+        for m in agent.working_memory:
+            lower = m.lower()
+            if "said" not in lower:
+                continue
+            if any(kw in lower for kw in cls._NEG_SPEECH_KW):
+                count += 1
+        return count
+
+    @staticmethod
     def _decision_stage_nudge(agent: AgentPersona) -> str:
         mem_lower = [m.lower() for m in agent.working_memory]
         has_compared = any("compared" in m or "compare" in m for m in mem_lower)
@@ -960,11 +1218,56 @@ class SimulationEngine:
             )
         return ""
 
+    @classmethod
+    def _speech_action_escalation(cls, agent: AgentPersona) -> str:
+        """Detect when an agent's speech is strongly negative but they haven't
+        taken a corresponding exit action. Applies generically based on
+        personality thresholds — not simulation-specific content."""
+        if agent.has_defected or agent.abandoned_products:
+            return ""
+
+        p = agent.personality
+        if p.brand_loyalty >= 0.7:
+            return ""
+
+        neg_rounds = cls._count_negative_speech_rounds(agent)
+        if neg_rounds < 2:
+            return ""
+
+        urgency = ""
+        if p.price_sensitivity >= 0.7 and neg_rounds >= 3:
+            urgency = (
+                "\n⚠️ SPEECH-ACTION GAP: You have expressed strong dissatisfaction "
+                f"{neg_rounds} times but haven't acted on it. Your price_sensitivity "
+                f"is {p.price_sensitivity:.1f} — real consumers with your profile "
+                "would have already made a decision: ABANDON, DEFECT, or COMPARE. "
+                "Talking without acting is unrealistic for someone this price-sensitive. "
+                "DECIDE NOW or COMPLY to accept the situation."
+            )
+        elif p.brand_loyalty < 0.5 and neg_rounds >= 3:
+            urgency = (
+                "\n⚠️ SPEECH-ACTION GAP: You've complained {n} times but taken no "
+                "concrete action. With brand_loyalty={bl:.1f}, continuing to complain "
+                "without deciding is unrealistic. Either commit to leaving (ABANDON/DEFECT), "
+                "start exploring (COMPARE), or stop complaining (COMPLY/DO_NOTHING)."
+                .format(n=neg_rounds, bl=p.brand_loyalty)
+            )
+        elif neg_rounds >= 4:
+            urgency = (
+                "\n💡 You've been vocally negative for {n} rounds without acting. "
+                "At some point, people either leave or make peace with the situation. "
+                "Which are you? Take a concrete action or choose COMPLY."
+                .format(n=neg_rounds)
+            )
+
+        return urgency
+
     def _build_decision_prompt(
         self,
         agent: AgentPersona,
         world_state: WorldState,
         all_agents: list[AgentPersona],
+        simulation_id: str = "",
     ) -> tuple[str, str]:
         others = [a for a in all_agents if a.id != agent.id]
         nearby = self.gossip.social_neighbors(agent, all_agents, count=5)
@@ -998,6 +1301,12 @@ class SimulationEngine:
         if event_disputes:
             context_parts.append(f"RECENT EVENT that just happened: {event_disputes[-1]}")
 
+        if agent.abandoned_products:
+            prods = ", ".join(agent.abandoned_products)
+            context_parts.append(f"YOU ALREADY LEFT: {prods}. You cannot leave again. Focus on what comes next — recommend alternatives, influence others, or observe.")
+        if agent.has_defected:
+            context_parts.append("YOU ALREADY SWITCHED to a competitor. You cannot switch again. Share your experience or influence others instead.")
+
         is_market = self._is_market_simulation(world_state)
         market_actions = {
             ActionType.RECOMMEND, ActionType.PURCHASE,
@@ -1018,6 +1327,11 @@ class SimulationEngine:
             available = [a for a in available if a not in social_actions]
         if not self.research or not self.research.enabled:
             available = [a for a in available if a != ActionType.RESEARCH]
+
+        if agent.abandoned_products:
+            available = [a for a in available if a != ActionType.ABANDON]
+        if agent.has_defected:
+            available = [a for a in available if a != ActionType.DEFECT]
 
         if is_market:
             mem_lower = [m.lower() for m in agent.working_memory]
@@ -1058,15 +1372,26 @@ class SimulationEngine:
 
         market_context = ""
         if is_market:
-            m = world_state.metrics
-            market_context = (
-                f"\nMARKET PULSE:\n"
-                f"Brand sentiment: {m.brand_sentiment:.2f}, "
-                f"Purchase intent: {m.purchase_intent:.2f}, "
-                f"Word of mouth: {m.word_of_mouth:.2f}, "
-                f"Churn risk: {m.churn_risk:.2f}, "
-                f"Adoption rate: {m.adoption_rate:.2f}"
-            )
+            trend_ctx = ""
+            if self.forecast and self.forecast.available and simulation_id:
+                try:
+                    from app.services.forecast import METRIC_KEYS_MARKET
+                    trend_ctx = self.forecast.trend_context(simulation_id, METRIC_KEYS_MARKET)
+                except Exception:
+                    pass
+
+            if trend_ctx:
+                market_context = "\n" + trend_ctx
+            else:
+                m = world_state.metrics
+                market_context = (
+                    f"\nMARKET PULSE:\n"
+                    f"Brand sentiment: {m.brand_sentiment:.2f}, "
+                    f"Purchase intent: {m.purchase_intent:.2f}, "
+                    f"Word of mouth: {m.word_of_mouth:.2f}, "
+                    f"Churn risk: {m.churn_risk:.2f}, "
+                    f"Adoption rate: {m.adoption_rate:.2f}"
+                )
             position_tracker = self._build_position_tracker(agent, all_agents)
             if position_tracker:
                 market_context += position_tracker
@@ -1076,12 +1401,27 @@ class SimulationEngine:
             stage_nudge = self._decision_stage_nudge(agent)
             if stage_nudge:
                 market_context += stage_nudge
+            escalation = self._speech_action_escalation(agent)
+            if escalation:
+                market_context += escalation
 
         if is_market:
+            mandate = self._build_personality_mandate(agent, all_agents)
+            if mandate:
+                has_protested = any("protest" in m.lower() for m in agent.working_memory)
+                if not has_protested and agent.personality.brand_loyalty >= 0.7:
+                    available = [a for a in available if a not in (ActionType.ABANDON, ActionType.DEFECT)]
+
             repetition_warning = self._detect_repetition(agent)
             behavior_rules = BEHAVIOR_RULES_MARKET.format(repetition_warning=repetition_warning)
+            if mandate:
+                behavior_rules = mandate + "\n\n" + behavior_rules
         else:
             behavior_rules = BEHAVIOR_RULES_SOCIAL
+
+        cross_rep = self._detect_cross_agent_repetition(agent, all_agents)
+        if cross_rep:
+            behavior_rules += cross_rep
 
         rules_text = self._build_rules_for_agent(agent, world_state)
 
@@ -1096,6 +1436,30 @@ class SimulationEngine:
             life_context_block = build_life_prompt_block(agent, world_state.day, context_str)
         else:
             life_context_block = ""
+
+        has_recent_life_event = any(
+            "life event" in m.lower() or "experienced" in m.lower()
+            or (agent.life_state and agent.life_state.life_log and
+                any(f"day {world_state.day}" in entry.lower() for entry in agent.life_state.life_log[-2:]))
+            for m in agent.working_memory[-3:]
+        )
+        if has_recent_life_event and life_context_block:
+            life_context_block += (
+                "\n\nYOUR RECENT LIFE EVENT may shift your priorities. Consider: "
+                "does this personal milestone or setback change how you feel about "
+                "the current community debate? A fresh perspective drawn from "
+                "personal experience is far more interesting than echoing what "
+                "everyone else already said."
+            )
+
+        coherence_hint = ""
+        if self.forecast and simulation_id:
+            hint = self.forecast.get_coherence_hint(simulation_id, agent.id)
+            if hint:
+                coherence_hint = "\n" + hint + "\n"
+
+        if coherence_hint:
+            behavior_rules = coherence_hint + "\n" + behavior_rules
 
         system = AGENT_DECISION_SYSTEM.format(
             name=agent.name,
@@ -1149,11 +1513,32 @@ class SimulationEngine:
             filtered.append("- You haven't heard about any recent changes. Everything seems normal to you.")
         return "\n".join(filtered) if filtered else "\n".join(f"- {r}" for r in all_rules)
 
-    @staticmethod
-    def _build_recent_conversation(agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
-        """Collect recent public speeches from other agents' working memory to create
-        conversation threading — agents respond to specific things people said."""
-        recent_speeches: list[str] = []
+    _NEGATIVE_KW = frozenset({
+        "frustrated", "angry", "disappointed", "betrayed", "ridiculous",
+        "unacceptable", "greed", "terrible", "awful", "worst", "hate",
+        "overpriced", "rip-off", "cancel", "leaving", "done with",
+        "can't believe", "outrageous", "unfair", "disgusting",
+    })
+    _POSITIVE_KW = frozenset({
+        "love", "great", "worth", "enjoy", "amazing", "fantastic",
+        "happy", "loyal", "staying", "recommend", "value", "appreciate",
+        "satisfied", "excellent", "good deal", "fair",
+    })
+
+    @classmethod
+    def _classify_sentiment(cls, text: str) -> str:
+        lower = text.lower()
+        neg = sum(1 for kw in cls._NEGATIVE_KW if kw in lower)
+        pos = sum(1 for kw in cls._POSITIVE_KW if kw in lower)
+        if neg > pos:
+            return "negative"
+        if pos > neg:
+            return "positive"
+        return "neutral"
+
+    @classmethod
+    def _build_recent_conversation(cls, agent: AgentPersona, all_agents: list[AgentPersona]) -> str:
+        tagged: list[tuple[str, str]] = []
         for other in all_agents:
             if other.id == agent.id:
                 continue
@@ -1162,15 +1547,44 @@ class SimulationEngine:
                     parts = mem.split('said "')
                     if len(parts) >= 2:
                         quote = parts[-1].rstrip('"').rstrip("'")
-                        recent_speeches.append(f"- {other.name}: \"{quote[:100]}\"")
-        if not recent_speeches:
+                        line = f"- {other.name}: \"{quote[:100]}\""
+                        sentiment = cls._classify_sentiment(quote)
+                        tagged.append((line, sentiment))
+
+        if not tagged:
             return ""
-        shown = recent_speeches[-5:]
+
+        neg = [t for t in tagged if t[1] == "negative"]
+        pos = [t for t in tagged if t[1] == "positive"]
+        neu = [t for t in tagged if t[1] == "neutral"]
+
+        shown: list[str] = []
+        if pos:
+            shown.append(pos[-1][0])
+        if neu:
+            shown.append(neu[-1][0])
+        for item in neg[-3:]:
+            shown.append(item[0])
+        if not shown:
+            shown = [t[0] for t in tagged[-5:]]
+        shown = shown[:5]
+
+        unanimity_warning = ""
+        if len(neg) >= 3 and not pos and not neu:
+            unanimity_warning = (
+                "\n\nNOTICE: Everyone is expressing the same negative sentiment. "
+                "In reality, people notice unanimity and react to it — some push back, "
+                "some get bored, some stay silent. Consider whether you truly have "
+                "something NEW to add, or whether DO_NOTHING or a contrarian take "
+                "would be more realistic."
+            )
+
         return (
             "RECENT CONVERSATION (what people just said):\n"
             + "\n".join(shown)
             + "\n\nYou can respond to any of these directly, change the subject, or ignore them. "
             "If you respond, reference the person BY NAME."
+            + unanimity_warning
         )
 
     @staticmethod

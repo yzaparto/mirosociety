@@ -87,3 +87,5 @@ class AgentPersona(BaseModel):
     communication_style: str = Field(default="emotional")
     knowledge_level: str = Field(default="full")
     life_state: LifeState | None = None
+    abandoned_products: set[str] = Field(default_factory=set)
+    has_defected: bool = False

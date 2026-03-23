@@ -201,3 +201,80 @@ class ReportAnalyzer:
         if rounds >= 15 and agent_count >= 8:
             return "medium"
         return "low"
+
+    @staticmethod
+    def format_causal_links(causal_links: list) -> list[dict]:
+        """Format CausalLink objects for the report."""
+        return [
+            {
+                "cause": l.cause,
+                "cause_label": l.cause.replace("_", " ").title(),
+                "effect": l.effect,
+                "effect_label": l.effect.replace("_", " ").title(),
+                "lag": l.lag,
+                "p_value": l.p_value,
+                "strength": l.strength,
+                "description": (
+                    f"{l.cause.replace('_', ' ').title()} Granger-causes "
+                    f"{l.effect.replace('_', ' ').title()} with a {l.lag}-round lag "
+                    f"(p={l.p_value:.3f}, {l.strength} evidence)"
+                ),
+            }
+            for l in causal_links
+        ]
+
+    @staticmethod
+    def format_counterfactuals(counterfactuals: list) -> list[dict]:
+        """Format CounterfactualResult objects for the report."""
+        results = []
+        for c in counterfactuals:
+            significant_impacts = {
+                k: v for k, v in c.metric_impacts.items() if abs(v) > 0.03
+            }
+            if not significant_impacts:
+                continue
+            results.append({
+                "event_round": c.event_round,
+                "event_description": c.event_description,
+                "impacts": [
+                    {
+                        "metric": k,
+                        "label": k.replace("_", " ").title(),
+                        "delta": round(v, 3),
+                        "direction": "increased" if v > 0 else "decreased",
+                        "description": (
+                            f"{k.replace('_', ' ').title()} {'increased' if v > 0 else 'decreased'} "
+                            f"by {abs(v):.2f} due to this event"
+                        ),
+                    }
+                    for k, v in sorted(significant_impacts.items(), key=lambda x: abs(x[1]), reverse=True)
+                ],
+            })
+        return results
+
+    @staticmethod
+    def format_coherence_scores(coherence_scores: dict) -> dict:
+        """Summarize agent coherence for the report."""
+        if not coherence_scores:
+            return {"overall_score": 1.0, "total_agents": 0, "coherent_count": 0, "flagged_agents": []}
+
+        scores = list(coherence_scores.values())
+        overall = sum(s.score for s in scores) / len(scores) if scores else 1.0
+        coherent = sum(1 for s in scores if s.score >= 0.5)
+        flagged = [
+            {
+                "agent_id": s.agent_id,
+                "score": round(s.score, 2),
+                "contradictions": s.contradictions,
+            }
+            for s in sorted(scores, key=lambda x: x.score)
+            if s.score < 0.5
+        ][:5]
+
+        return {
+            "overall_score": round(overall, 2),
+            "total_agents": len(scores),
+            "coherent_count": coherent,
+            "coherent_pct": round((coherent / len(scores)) * 100) if scores else 100,
+            "flagged_agents": flagged,
+        }

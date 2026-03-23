@@ -54,6 +54,8 @@ class SSEEvent(BaseModel):
         "cancelled",
         "life_event",
         "demographics_loaded",
+        "anomaly_detected",
+        "coherence_warning",
     ]
     data: dict[str, Any] = Field(default_factory=dict)
 

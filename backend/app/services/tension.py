@@ -1,6 +1,7 @@
 from __future__ import annotations
 import logging
 import random
+from typing import Any
 
 from app.models.world import WorldState, WorldMetrics
 from app.models.agent import AgentPersona
@@ -84,6 +85,20 @@ class TensionEngine:
         self._quiet_rounds.pop(sim_id, None)
 
     @staticmethod
+    def _snapshot_counterfactual(
+        forecast: Any,
+        sim_id: str,
+        event_round: int,
+        event_text: str,
+    ) -> None:
+        if forecast is None:
+            return
+        try:
+            forecast.snapshot_for_counterfactual(sim_id, event_round, event_text)
+        except Exception:
+            pass
+
+    @staticmethod
     def find_bridge_nodes(agents: list[AgentPersona]) -> list[int]:
         faction_map: dict[str, set[int]] = {}
         for a in agents:
@@ -114,6 +129,7 @@ class TensionEngine:
         agents: list[AgentPersona],
         recent_actions_significant: int,
         sim_id: str = "",
+        forecast: Any | None = None,
     ) -> tuple[WorldState, list[AgentPersona], str | None]:
         is_market = self._is_market(world_state)
 
@@ -145,12 +161,30 @@ class TensionEngine:
 
         talk_only_stagnation = is_market and quiet >= 2
 
-        needs_intervention = (
+        quiet_threshold = 3 if is_market else 5
+        base_needs_intervention = (
             stable >= 3
-            or quiet >= (3 if is_market else 5)
+            or quiet >= quiet_threshold
             or market_stagnation
             or talk_only_stagnation
         )
+
+        forecast_disrupt = False
+        if forecast is not None and getattr(forecast, "available", False):
+            try:
+                forecast_disrupt = bool(forecast.should_disrupt(sim_id))
+            except Exception:
+                forecast_disrupt = False
+
+        partial_quiet_met = quiet >= (2 if is_market else 4)
+        partial_stable_met = stable >= 2
+        forecast_accelerates = forecast_disrupt and (
+            partial_quiet_met or partial_stable_met or market_stagnation or talk_only_stagnation
+        )
+
+        quiet_fallback = quiet > 12
+
+        needs_intervention = base_needs_intervention or forecast_accelerates or quiet_fallback
 
         dominant_faction = self._find_dominant_faction(agents)
 
@@ -159,22 +193,28 @@ class TensionEngine:
 
         if dominant_faction and random.random() < 0.4:
             agents, event_desc = await self._faction_fracture(
-                world_state, agents, dominant_faction
+                world_state, agents, dominant_faction, forecast=forecast, sim_id=sim_id
             )
             self._stable_rounds[sim_id] = 0
             return world_state, agents, event_desc
         elif talk_only_stagnation:
-            agents, event_desc = self._internal_pressure(agents, world_state=world_state)
+            agents, event_desc = self._internal_pressure(
+                agents, world_state=world_state, forecast=forecast, sim_id=sim_id
+            )
             self._stable_rounds[sim_id] = 0
             self._quiet_rounds[sim_id] = 0
             return world_state, agents, event_desc
-        elif quiet >= (3 if is_market else 5) or random.random() < 0.5:
-            world_state, agents, event_desc = await self._external_event(world_state, agents)
+        elif quiet >= quiet_threshold or random.random() < 0.5:
+            world_state, agents, event_desc = await self._external_event(
+                world_state, agents, forecast=forecast, sim_id=sim_id
+            )
             self._stable_rounds[sim_id] = 0
             self._quiet_rounds[sim_id] = 0
             return world_state, agents, event_desc
         else:
-            agents, event_desc = self._internal_pressure(agents, world_state=world_state)
+            agents, event_desc = self._internal_pressure(
+                agents, world_state=world_state, forecast=forecast, sim_id=sim_id
+            )
             self._stable_rounds[sim_id] = 0
             return world_state, agents, event_desc
 
@@ -191,7 +231,11 @@ class TensionEngine:
         return None
 
     def _internal_pressure(
-        self, agents: list[AgentPersona], world_state: WorldState,
+        self,
+        agents: list[AgentPersona],
+        world_state: WorldState,
+        forecast: Any | None = None,
+        sim_id: str = "",
     ) -> tuple[list[AgentPersona], str]:
         day = world_state.day
         calm_agents = [
@@ -238,6 +282,17 @@ class TensionEngine:
             ]
             action_nudges = []
 
+        names = ", ".join(t.name for t in targets)
+        if is_market:
+            event_desc = (
+                f"Consumer patience wore thin: {names} started seriously reconsidering their choices."
+            )
+        else:
+            event_desc = (
+                f"A quiet restlessness stirred among some citizens: {names} began to question things."
+            )
+        self._snapshot_counterfactual(forecast, sim_id, day, event_desc)
+
         for agent in targets:
             agent.emotional_state = random.choice(["restless", "dissatisfied", "frustrated"])
             if is_market:
@@ -263,10 +318,7 @@ class TensionEngine:
                     f"Day {day}: A growing sense of unease settled over me."
                 )
 
-        names = ", ".join(t.name for t in targets)
-        if is_market:
-            return agents, f"Consumer patience wore thin: {names} started seriously reconsidering their choices."
-        return agents, f"A quiet restlessness stirred among some citizens: {names} began to question things."
+        return agents, event_desc
 
     @staticmethod
     def _is_market(world_state: WorldState) -> bool:
@@ -277,7 +329,11 @@ class TensionEngine:
         )
 
     async def _external_event(
-        self, world_state: WorldState, agents: list[AgentPersona],
+        self,
+        world_state: WorldState,
+        agents: list[AgentPersona],
+        forecast: Any | None = None,
+        sim_id: str = "",
     ) -> tuple[WorldState, list[AgentPersona], str]:
         is_market = self._is_market(world_state)
 
@@ -307,6 +363,8 @@ class TensionEngine:
         data = parse_json(response)
 
         event_desc = data.get("event", "An unexpected disruption shook the community.")
+
+        self._snapshot_counterfactual(forecast, sim_id, world_state.day, event_desc)
 
         resource_changes = data.get("resource_changes", {})
         if resource_changes:
@@ -342,6 +400,8 @@ class TensionEngine:
         world_state: WorldState,
         agents: list[AgentPersona],
         faction_name: str,
+        forecast: Any | None = None,
+        sim_id: str = "",
     ) -> tuple[list[AgentPersona], str]:
         members = [a for a in agents if a.faction == faction_name]
 
@@ -357,6 +417,13 @@ class TensionEngine:
         splinter_belief = data.get("splinter_belief", f"The {faction_name} has lost its way")
 
         splinter_targets = random.sample(members, min(3, len(members)))
+        names = ", ".join(t.name for t in splinter_targets)
+        event_desc = (
+            f"Cracks appeared in {faction_name}. {names} began privately questioning "
+            f"the group's direction: \"{splinter_belief}\""
+        )
+        self._snapshot_counterfactual(forecast, sim_id, world_state.day, event_desc)
+
         for agent in splinter_targets:
             if splinter_belief not in agent.beliefs:
                 agent.beliefs.append(splinter_belief)
@@ -365,9 +432,4 @@ class TensionEngine:
                 f"I've started questioning whether {faction_name} is truly on the right path."
             )
 
-        names = ", ".join(t.name for t in splinter_targets)
-        event_desc = (
-            f"Cracks appeared in {faction_name}. {names} began privately questioning "
-            f"the group's direction: \"{splinter_belief}\""
-        )
         return agents, event_desc

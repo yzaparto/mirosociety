@@ -359,10 +359,34 @@ class GossipEngine:
 
                 if new_info:
                     self._upgrade_knowledge(agent, new_info)
+
+                    neg_kw = {"frustrated", "angry", "disappointed", "betrayed",
+                              "ridiculous", "cancel", "leaving", "abandoned", "left",
+                              "protested", "defected", "greed", "overpriced"}
+                    neg_items: list[InfoItem] = []
+                    other_items: list[InfoItem] = []
+                    for item in new_info:
+                        lower = item.content.lower()
+                        if any(kw in lower for kw in neg_kw):
+                            neg_items.append(item)
+                        else:
+                            other_items.append(item)
+
+                    MAX_SAME_SENTIMENT = 3
+                    if len(neg_items) > MAX_SAME_SENTIMENT:
+                        kept_neg = neg_items[:MAX_SAME_SENTIMENT]
+                        overflow_count = len(neg_items) - MAX_SAME_SENTIMENT
+                        capped = kept_neg + other_items
+                    else:
+                        capped = neg_items + other_items
+                        overflow_count = 0
+
                     heard_parts = []
-                    for item in new_info[:5]:
+                    for item in capped[:5]:
                         framed = self._frame_info(item, agent)
                         heard_parts.append(framed)
+                    if overflow_count > 0:
+                        heard_parts.append(f"{overflow_count} others shared similar frustrations")
 
                     summary = f"Day {day} {time_of_day}: Heard: " + "; ".join(heard_parts)
                 else:

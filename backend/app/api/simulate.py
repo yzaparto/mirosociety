@@ -5,7 +5,7 @@ import uuid
 import logging
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from sse_starlette.sse import EventSourceResponse
 
@@ -357,6 +357,41 @@ async def compare(sim_id: str, fork_id: str, request: Request):
             "metrics_history": fork_metrics,
             "final_day": fork_state.day,
         },
+    }
+
+
+@router.get("/simulation/{sim_id}/forecast")
+async def get_forecast(
+    sim_id: str,
+    request: Request,
+    horizon: int = Query(default=30, ge=1, le=365),
+):
+    store = request.app.state.store
+    forecast = getattr(request.app.state, "forecast", None)
+
+    if not forecast or not forecast.available:
+        return {"error": "Forecast service not available"}
+
+    metrics_history = await store.get_metrics_history(sim_id)
+    if not metrics_history:
+        raise HTTPException(404, "No metrics data found")
+
+    analysis = forecast.analyze(metrics_history, horizon=horizon)
+    causal_links = forecast.discover_causality(sim_id)
+    counterfactuals = forecast.compute_counterfactuals(sim_id)
+
+    return {
+        "analysis": analysis,
+        "causal_links": [
+            {"cause": l.cause, "effect": l.effect, "lag": l.lag,
+             "p_value": l.p_value, "strength": l.strength}
+            for l in causal_links
+        ],
+        "counterfactuals": [
+            {"event_round": c.event_round, "event_description": c.event_description,
+             "metric_impacts": c.metric_impacts}
+            for c in counterfactuals
+        ],
     }
 
 

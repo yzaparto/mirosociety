@@ -14,6 +14,7 @@ dependencies = [
     "sse-starlette>=2.0.0",
     "eval_type_backport>=0.2.0",
     "duckduckgo-search>=6.0.0",
+    "darts>=0.42.0",
 ]
 
 [project.optional-dependencies]

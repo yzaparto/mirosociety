@@ -23,7 +23,7 @@
         </div>
         <!-- Sparkline -->
         <div v-if="getSparkline(s.metric).length > 1" class="mt-2.5 h-6">
-          <svg class="w-full h-full" preserveAspectRatio="none" :viewBox="`0 0 ${getSparkline(s.metric).length - 1} 1`">
+          <svg class="w-full h-full" preserveAspectRatio="none" :viewBox="`0 0 ${Math.max(getSparkline(s.metric).length - 1, getSparkline(s.metric).length + getForecastValues(s.metric).length - 1)} 1`">
             <polyline
               :points="sparklinePoints(s.metric)"
               fill="none"
@@ -33,6 +33,19 @@
               stroke-linecap="round"
               vector-effect="non-scaling-stroke"
               style="stroke-width: 1.5px"
+            />
+            <polyline
+              v-if="forecastPoints(s.metric)"
+              :points="forecastPoints(s.metric)"
+              fill="none"
+              stroke="#94a3b8"
+              stroke-width="0.06"
+              stroke-dasharray="0.15,0.1"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+              vector-effect="non-scaling-stroke"
+              style="stroke-width: 1.5px"
+              opacity="0.6"
             />
           </svg>
         </div>
@@ -46,6 +59,7 @@
 const props = defineProps({
   scorecard: { type: Array, default: () => [] },
   metricsHistory: { type: Array, default: () => [] },
+  forecasts: { type: Object, default: () => ({}) },
 })
 
 function getSparkline(metricKey) {
@@ -61,6 +75,22 @@ function sparklinePoints(metricKey) {
   const vals = getSparkline(metricKey)
   if (vals.length < 2) return ''
   return vals.map((v, i) => `${i},${1 - v}`).join(' ')
+}
+
+function getForecastValues(metricKey) {
+  if (!props.forecasts?.projections) return []
+  const proj = props.forecasts.projections.find(p => p.metric === metricKey)
+  return proj ? proj.projected.slice(0, 10) : []
+}
+
+function forecastPoints(metricKey) {
+  const historical = getSparkline(metricKey)
+  const forecast = getForecastValues(metricKey)
+  if (!forecast.length || historical.length < 2) return ''
+  const startX = historical.length - 1
+  const allPoints = [{ x: startX, y: historical[historical.length - 1] }]
+  forecast.forEach((v, i) => allPoints.push({ x: startX + i + 1, y: v }))
+  return allPoints.map(p => `${p.x},${1 - p.y}`).join(' ')
 }
 
 function sparklineStroke(rating) {

@@ -115,4 +115,9 @@ export default {
     const { data } = await api.get('/presets')
     return data
   },
+
+  async getForecast(simulationId) {
+    const { data } = await api.get(`/simulation/${simulationId}/forecast`)
+    return data
+  },
 }

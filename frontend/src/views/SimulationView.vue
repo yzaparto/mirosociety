@@ -575,6 +575,8 @@ const toasts = ref([])
 const actorFlash = reactive({})
 const speechBubbles = reactive({})
 const agentLastAction = reactive({})
+const anomalies = ref([])
+const coherenceWarnings = ref([])
 
 let toastCounter = 0
 
@@ -1425,6 +1427,17 @@ onMounted(() => {
   es.addEventListener('demographics_loaded', (e) => {
     const d = JSON.parse(e.data)
     demographics.value = d
+  })
+
+  es.addEventListener('anomaly_detected', (e) => {
+    const d = JSON.parse(e.data)
+    anomalies.value.push(d)
+    addToast(`Anomaly: ${d.metric || 'metric'} — ${d.description || 'unusual pattern detected'}`, 'warning')
+  })
+
+  es.addEventListener('coherence_warning', (e) => {
+    const d = JSON.parse(e.data)
+    coherenceWarnings.value.push(d)
   })
 
   es.addEventListener('simulation_complete', () => {

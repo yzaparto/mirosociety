@@ -101,7 +101,84 @@
         </div>
 
         <!-- 2. Scorecard (extracted component with sparklines) -->
-        <ScorecardGrid :scorecard="report.scorecard" :metrics-history="report.metrics_history" />
+        <ScorecardGrid :scorecard="report.scorecard" :metrics-history="report.metrics_history" :forecasts="report.forecasts || {}" />
+
+        <!-- Causal Map -->
+        <div v-if="report.causal_map?.length">
+          <h2 class="section-title">Causal Relationships</h2>
+          <p class="text-xs text-slate-500 mb-3">Statistically discovered cause-and-effect relationships between metrics (Granger causality)</p>
+          <div class="space-y-2">
+            <div v-for="(link, idx) in report.causal_map" :key="idx"
+              class="flex items-center gap-3 bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+              <div class="flex items-center gap-2 flex-1">
+                <span class="text-sm font-medium text-slate-700">{{ link.cause_label }}</span>
+                <span class="text-xs text-slate-400">→</span>
+                <span class="text-sm font-medium text-slate-700">{{ link.effect_label }}</span>
+              </div>
+              <span class="text-xs text-slate-500">{{ link.lag }}-round lag</span>
+              <span :class="['text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded',
+                link.strength === 'strong' ? 'bg-emerald-100 text-emerald-600' :
+                link.strength === 'moderate' ? 'bg-amber-100 text-amber-600' :
+                'bg-gray-200 text-slate-500']">
+                {{ link.strength }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Counterfactual Analysis -->
+        <div v-if="report.counterfactuals?.length">
+          <h2 class="section-title">What-If Analysis</h2>
+          <p class="text-xs text-slate-500 mb-3">How key events changed the simulation trajectory vs. projected baseline</p>
+          <div class="space-y-3">
+            <div v-for="(cf, idx) in report.counterfactuals" :key="idx"
+              class="bg-white border border-gray-200 rounded-lg p-4">
+              <div class="text-sm font-medium text-slate-700 mb-2">{{ cf.event_description }}</div>
+              <div class="flex flex-wrap gap-2">
+                <div v-for="impact in cf.impacts" :key="impact.metric"
+                  :class="['text-xs px-2 py-1 rounded-md',
+                    impact.delta > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700']">
+                  {{ impact.label }}: {{ impact.delta > 0 ? '+' : '' }}{{ (impact.delta * 100).toFixed(1) }}%
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Simulation Quality (Agent Coherence) -->
+        <div v-if="report.agent_coherence?.total_agents">
+          <h2 class="section-title">Simulation Quality</h2>
+          <div class="bg-white border border-gray-200 rounded-lg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <span class="text-2xl font-bold font-mono">{{ report.agent_coherence.coherent_pct }}%</span>
+                <span class="text-xs text-slate-500 ml-2">of agents behaved consistently with their personality</span>
+              </div>
+              <span :class="['text-[10px] font-semibold uppercase px-2 py-1 rounded',
+                report.agent_coherence.coherent_pct >= 80 ? 'bg-emerald-100 text-emerald-600' :
+                report.agent_coherence.coherent_pct >= 60 ? 'bg-amber-100 text-amber-600' :
+                'bg-red-100 text-red-600']">
+                {{ report.agent_coherence.coherent_pct >= 80 ? 'high quality' : report.agent_coherence.coherent_pct >= 60 ? 'moderate' : 'low quality' }}
+              </span>
+            </div>
+            <div class="w-full bg-gray-100 rounded-full h-2 mb-3">
+              <div :class="['h-full rounded-full',
+                report.agent_coherence.coherent_pct >= 80 ? 'bg-emerald-500' :
+                report.agent_coherence.coherent_pct >= 60 ? 'bg-amber-500' : 'bg-red-500']"
+                :style="{ width: report.agent_coherence.coherent_pct + '%' }">
+              </div>
+            </div>
+            <div v-if="report.agent_coherence.flagged_agents?.length" class="space-y-2 mt-3 pt-3 border-t border-gray-100">
+              <div class="text-xs text-slate-500 font-medium">Flagged agents:</div>
+              <div v-for="fa in report.agent_coherence.flagged_agents" :key="fa.agent_id"
+                class="text-xs text-slate-500">
+                <span class="text-red-600 font-medium">Agent {{ fa.agent_id }}</span>
+                (coherence: {{ (fa.score * 100).toFixed(0) }}%)
+                <span v-if="fa.contradictions.length"> — {{ fa.contradictions[0] }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- 3. Key Insights -->
         <div v-if="report.insights?.length">

@@ -66,6 +66,7 @@ class ActionResolver:
         world_state: WorldState,
         all_agents: list[AgentPersona],
         round_num: int,
+        forecast=None,
     ) -> tuple[list[ActionEntry], WorldState, list[AgentPersona]]:
         entries: list[ActionEntry] = []
         agent_map = {a.id: a for a in all_agents}
@@ -101,7 +102,20 @@ class ActionResolver:
 
             agent_map[agent.id].emotional_state = normalize_emotional_state(decision.feel)
 
+        old_metrics = world_state.metrics.model_copy()
         world_state.metrics = self._update_metrics(world_state.metrics, entries, world_state)
+
+        if forecast is not None:
+            try:
+                proposed = world_state.metrics.model_dump()
+                current = old_metrics.model_dump()
+                sim_id = getattr(forecast, '_current_sim_id', '')
+                clamped = forecast.clamp_metrics(sim_id, proposed, current)
+                for key, val in clamped.items():
+                    if hasattr(world_state.metrics, key):
+                        setattr(world_state.metrics, key, val)
+            except Exception:
+                pass
 
         all_agents = list(agent_map.values())
         self._emotional_contagion(all_agents)
@@ -124,6 +138,32 @@ class ActionResolver:
         rel_changes: dict = {}
 
         at = decision.action
+
+        if at == ActionType.ABANDON:
+            product = (decision.args or {}).get("product", "the product").lower()
+            if product in agent.abandoned_products:
+                at = ActionType.SPEAK_PUBLIC
+                decision = AgentDecision(
+                    feel=decision.feel, want=decision.want, fear=decision.fear,
+                    life_context=decision.life_context, past_echo=decision.past_echo,
+                    action=ActionType.SPEAK_PUBLIC, args={},
+                    speech=decision.speech or f"I already left {product}.",
+                    internal_thought=decision.internal_thought,
+                    belief_updates=decision.belief_updates,
+                    memory_promotion=decision.memory_promotion,
+                )
+
+        if at == ActionType.DEFECT and agent.has_defected:
+            at = ActionType.SPEAK_PUBLIC
+            decision = AgentDecision(
+                feel=decision.feel, want=decision.want, fear=decision.fear,
+                life_context=decision.life_context, past_echo=decision.past_echo,
+                action=ActionType.SPEAK_PUBLIC, args={},
+                speech=decision.speech or "I've already made my switch.",
+                internal_thought=decision.internal_thought,
+                belief_updates=decision.belief_updates,
+                memory_promotion=decision.memory_promotion,
+            )
 
         if at == ActionType.SPEAK_PUBLIC:
             if decision.speech:
@@ -298,6 +338,7 @@ class ActionResolver:
             world_state.active_disputes.append(f"{agent.name} defected: {action_args.get('how', 'broke the rules')}")
             if len(world_state.active_disputes) > 10:
                 world_state.active_disputes.pop(0)
+            agent.has_defected = True
             agent.resources["influence"] = agent.resources.get("influence", 0) + 5
             for other in agent_map.values():
                 if other.id != agent.id:
@@ -373,6 +414,7 @@ class ActionResolver:
             if len(world_state.active_disputes) > 10:
                 world_state.active_disputes.pop(0)
             world_changes["abandon"] = product
+            agent.abandoned_products.add(product.lower())
             if decision.speech:
                 action_args["content"] = decision.speech
 

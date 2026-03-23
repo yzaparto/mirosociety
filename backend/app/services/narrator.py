@@ -127,8 +127,9 @@ Return JSON:
 
 
 class Narrator:
-    def __init__(self, llm: LLMClient):
+    def __init__(self, llm: LLMClient, forecast=None):
         self.llm = llm
+        self._forecast = forecast
 
     async def narrate_round(
         self,
@@ -264,6 +265,35 @@ class Narrator:
         inflection_points = ReportAnalyzer.detect_inflection_points(metrics_history)
         confidence = ReportAnalyzer.compute_confidence(metrics_history, len(agents))
 
+        # --- Pass 1b: Darts-based analysis ---
+        forecast_analysis = {}
+        causal_map = []
+        counterfactual_data = []
+        coherence_data = {}
+        forecast = getattr(self, '_forecast', None)
+        if forecast and forecast.available:
+            try:
+                forecast_analysis = forecast.analyze(metrics_history)
+            except Exception as e:
+                logger.debug("Forecast analysis failed: %s", e)
+            try:
+                causal_links = forecast.discover_causality(simulation_id)
+                causal_map = ReportAnalyzer.format_causal_links(causal_links)
+            except Exception as e:
+                logger.debug("Causal discovery failed: %s", e)
+            try:
+                counterfactual_results = forecast.compute_counterfactuals(simulation_id)
+                counterfactual_data = ReportAnalyzer.format_counterfactuals(counterfactual_results)
+            except Exception as e:
+                logger.debug("Counterfactual computation failed: %s", e)
+            try:
+                from app.services.forecast import _SimState
+                sim_state = forecast._sims.get(simulation_id)
+                if sim_state and sim_state.coherence_scores:
+                    coherence_data = ReportAnalyzer.format_coherence_scores(sim_state.coherence_scores)
+            except Exception as e:
+                logger.debug("Coherence formatting failed: %s", e)
+
         # --- Pass 2: Metric interpretation + insights ---
         metrics_summary = "\n".join(
             f"- {s['label']}: {s['rating']} ({s['value']}/100), "
@@ -275,6 +305,11 @@ class Narrator:
             f"({p['value_before']:.2f} → {p['value_after']:.2f})"
             for p in inflection_points[:10]
         )
+        causal_summary = ""
+        if causal_map:
+            causal_summary = "Causal relationships discovered:\n" + "\n".join(
+                f"- {c['description']}" for c in causal_map[:5]
+            )
         agent_summary = "\n".join(
             f"- {a['name']} ({a['role']}): {a['total_actions']} actions, "
             f"state={a['emotional_state']}, faction={a['faction'] or 'none'}"
@@ -293,6 +328,7 @@ class Narrator:
             f"Agent summary:\n{agent_summary}\n\n"
             f"Total days: {total_days}, Total agents: {len(agents)}, "
             f"Total actions: {len(actions)}"
+            + (f"\n\nCausal analysis:\n{causal_summary}" if causal_summary else "")
         )
 
         response_p2 = await self.llm.generate(system=system_p2, user=user_p2, json_mode=True, max_tokens=2000)
@@ -401,4 +437,8 @@ class Narrator:
                 "rules": blueprint.rules,
                 "world_name": blueprint.name,
             },
+            "forecasts": forecast_analysis,
+            "causal_map": causal_map,
+            "counterfactuals": counterfactual_data,
+            "agent_coherence": coherence_data,
         }

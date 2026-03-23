@@ -22,6 +22,7 @@ from app.services.engine import SimulationEngine
 from app.services.research import ResearchService
 from app.services.gossip import GossipEngine
 from app.services.life_engine import LifeEngine
+from app.services.forecast import ForecastService
 from app.api.simulate import router as simulate_router
 from app.api.agents import router as agents_router
 from app.api.gallery import router as gallery_router
@@ -33,6 +34,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logs_dir = Path(__file__).resolve().parent.parent / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
     store = SimulationStore(settings.database_dir)
     await store.init()
 
@@ -47,7 +51,8 @@ async def lifespan(app: FastAPI):
     citizen_gen = CitizenGenerator(llm)
     tension = TensionEngine(llm)
     resolver = ActionResolver()
-    narrator = Narrator(llm)
+    forecast = ForecastService()
+    narrator = Narrator(llm, forecast=forecast)
     research = ResearchService(
         llm,
         enabled=settings.search_enabled,
@@ -55,13 +60,14 @@ async def lifespan(app: FastAPI):
     )
     gossip = GossipEngine()
     life_engine = LifeEngine(llm=llm)
-    engine = SimulationEngine(llm, store, tension, resolver, narrator, research=research, gossip=gossip, life_engine=life_engine)
+    engine = SimulationEngine(llm, store, tension, resolver, narrator, research=research, gossip=gossip, life_engine=life_engine, forecast=forecast)
 
     app.state.store = store
     app.state.llm = llm
     app.state.world_generator = world_gen
     app.state.citizen_generator = citizen_gen
     app.state.engine = engine
+    app.state.forecast = forecast
     app.state.narrator = narrator
     app.state.event_queues = {}
     app.state.cancelled_sims = set()
